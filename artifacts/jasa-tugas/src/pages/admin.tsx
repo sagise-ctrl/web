@@ -3,12 +3,24 @@ import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LockKeyhole, RefreshCw, Loader2 } from "lucide-react";
-import { useGetAllOrders, useUpdateOrder, OrderStatus } from "@/hooks/use-orders";
+import { LockKeyhole, RefreshCw, Loader2, ExternalLink } from "lucide-react";
+import { useGetAllOrders, useUpdateOrder, type OrderStatus, formatRupiah } from "@/hooks/use-orders";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+
+function statusBadgeClass(status: OrderStatus) {
+  switch (status) {
+    case "verifikasi tugas": return "bg-orange-50 text-orange-700 border-orange-200";
+    case "verifikasi pembayaran": return "bg-purple-50 text-purple-700 border-purple-200";
+    case "proses pengerjaan": return "bg-blue-50 text-blue-700 border-blue-200";
+    case "menunggu pelunasan": return "bg-cyan-50 text-cyan-700 border-cyan-200";
+    case "revisi": return "bg-yellow-50 text-yellow-700 border-yellow-200";
+    case "selesai": return "bg-green-50 text-green-700 border-green-200";
+    default: return "bg-slate-50 text-slate-700 border-slate-200";
+  }
+}
 
 export default function AdminPage() {
   const [password, setPassword] = useState("");
@@ -36,11 +48,12 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleLogin} className="space-y-4">
-                <Input 
-                  type="password" 
-                  placeholder="Masukkan password..." 
+                <Input
+                  type="password"
+                  placeholder="Masukkan password..."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
                 />
                 <Button type="submit" className="w-full">Masuk</Button>
               </form>
@@ -62,23 +75,17 @@ function AdminDashboard() {
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
     try {
       await updateOrder.mutateAsync({ orderId, status: newStatus });
-      toast({
-        title: "Status diperbarui",
-        description: `Order ${orderId} diubah menjadi ${newStatus}`,
-      });
+      toast({ title: "Status diperbarui", description: `Order ${orderId} → ${newStatus}` });
       refetch();
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Gagal update",
-        description: error.message,
-      });
+      toast({ variant: "destructive", title: "Gagal update", description: error.message });
     }
   };
 
-  const pendingCount = orders.filter(o => o.status === "pending").length;
-  const prosesCount = orders.filter(o => o.status === "proses").length;
-  const selesaiCount = orders.filter(o => o.status === "selesai").length;
+  const countByStatus = (s: string) => orders.filter(o => o.status === s).length;
+  const needsAction = orders.filter(o =>
+    o.status === "verifikasi tugas" || o.status === "verifikasi pembayaran"
+  ).length;
 
   return (
     <Layout>
@@ -91,29 +98,29 @@ function AdminDashboard() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Card className="bg-slate-50 border-slate-200">
-            <CardContent className="p-6">
-              <p className="text-sm font-medium text-slate-500 mb-1">Total Order</p>
-              <p className="text-3xl font-bold">{orders.length}</p>
+            <CardContent className="p-4">
+              <p className="text-xs font-medium text-slate-500 mb-1">Total Order</p>
+              <p className="text-2xl font-bold">{orders.length}</p>
             </CardContent>
           </Card>
-          <Card className="bg-yellow-50 border-yellow-200">
-            <CardContent className="p-6">
-              <p className="text-sm font-medium text-yellow-700 mb-1">Pending</p>
-              <p className="text-3xl font-bold text-yellow-800">{pendingCount}</p>
+          <Card className="bg-orange-50 border-orange-200">
+            <CardContent className="p-4">
+              <p className="text-xs font-medium text-orange-700 mb-1">Perlu Tindakan</p>
+              <p className="text-2xl font-bold text-orange-800">{needsAction}</p>
             </CardContent>
           </Card>
           <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="p-6">
-              <p className="text-sm font-medium text-blue-700 mb-1">Diproses</p>
-              <p className="text-3xl font-bold text-blue-800">{prosesCount}</p>
+            <CardContent className="p-4">
+              <p className="text-xs font-medium text-blue-700 mb-1">Dikerjakan</p>
+              <p className="text-2xl font-bold text-blue-800">{countByStatus("proses pengerjaan")}</p>
             </CardContent>
           </Card>
           <Card className="bg-green-50 border-green-200">
-            <CardContent className="p-6">
-              <p className="text-sm font-medium text-green-700 mb-1">Selesai</p>
-              <p className="text-3xl font-bold text-green-800">{selesaiCount}</p>
+            <CardContent className="p-4">
+              <p className="text-xs font-medium text-green-700 mb-1">Selesai</p>
+              <p className="text-2xl font-bold text-green-800">{countByStatus("selesai")}</p>
             </CardContent>
           </Card>
         </div>
@@ -128,9 +135,7 @@ function AdminDashboard() {
                 <Loader2 className="w-8 h-8 animate-spin mr-2" /> Memuat data...
               </div>
             ) : orders.length === 0 ? (
-              <div className="py-12 text-center text-slate-500">
-                Belum ada pesanan masuk.
-              </div>
+              <div className="py-12 text-center text-slate-500">Belum ada pesanan masuk.</div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -139,43 +144,88 @@ function AdminDashboard() {
                       <TableHead>Order ID</TableHead>
                       <TableHead>Nama & WA</TableHead>
                       <TableHead>Tugas</TableHead>
+                      <TableHead>Harga</TableHead>
                       <TableHead>Deadline</TableHead>
-                      <TableHead>Catatan</TableHead>
+                      <TableHead>File</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {orders.map((order) => (
-                      <TableRow key={order.order_id}>
-                        <TableCell className="font-medium whitespace-nowrap">{order.order_id}</TableCell>
+                      <TableRow key={order.order_id} data-testid={`row-order-${order.order_id}`}>
+                        <TableCell className="font-mono text-xs whitespace-nowrap">{order.order_id}</TableCell>
                         <TableCell>
-                          <div className="font-medium">{order.nama}</div>
-                          <div className="text-sm text-slate-500">{order.wa}</div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="mb-1">{order.jenis}</Badge>
-                          <div className="text-sm text-slate-500">{order.halaman} Hal/Slide</div>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {new Date(order.deadline).toLocaleDateString('id-ID')}
-                        </TableCell>
-                        <TableCell className="max-w-[200px] truncate" title={order.note}>
-                          {order.note || "-"}
+                          <div className="font-medium text-sm">{order.nama}</div>
+                          <div className="text-xs text-slate-500">{order.wa}</div>
                         </TableCell>
                         <TableCell>
-                          <Select 
-                            value={order.status} 
-                            onValueChange={(val: OrderStatus) => handleStatusChange(order.order_id, val)}
-                          >
-                            <SelectTrigger className="w-[140px] h-8 text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="proses">Proses</SelectItem>
-                              <SelectItem value="selesai">Selesai</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Badge variant="secondary" className="mb-1 text-xs">{order.jenis}</Badge>
+                          <div className="text-xs text-slate-500">{order.halaman} hal/slide</div>
+                          {order.tipe_order && order.tipe_order !== "standar" && (
+                            <Badge variant="outline" className="text-xs mt-1 capitalize">{order.tipe_order}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="font-medium">{order.harga ? formatRupiah(Number(order.harga)) : "-"}</div>
+                          <div className="text-xs text-slate-500">DP: {order.dp ? formatRupiah(Number(order.dp)) : "-"}</div>
+                          <div className="text-xs text-slate-500">Sisa: {order.sisa_bayar ? formatRupiah(Number(order.sisa_bayar)) : "-"}</div>
+                        </TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">
+                          {order.deadline ? new Date(order.deadline).toLocaleDateString("id-ID") : "-"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            {order.bukti_dp_url && (
+                              <a href={order.bukti_dp_url} target="_blank" rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                <ExternalLink className="w-3 h-3" /> Bukti DP
+                              </a>
+                            )}
+                            {order.bukti_pelunasan_url && (
+                              <a href={order.bukti_pelunasan_url} target="_blank" rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                <ExternalLink className="w-3 h-3" /> Bukti Lunas
+                              </a>
+                            )}
+                            {order.file_tugas_url && (
+                              <a href={order.file_tugas_url} target="_blank" rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                <ExternalLink className="w-3 h-3" /> File Tugas
+                              </a>
+                            )}
+                            {order.hasil_url && (
+                              <a href={order.hasil_url} target="_blank" rel="noopener noreferrer"
+                                className="text-xs text-green-600 hover:underline flex items-center gap-1">
+                                <ExternalLink className="w-3 h-3" /> Hasil
+                              </a>
+                            )}
+                            {!order.bukti_dp_url && !order.file_tugas_url && !order.hasil_url && (
+                              <span className="text-xs text-slate-400">-</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Badge variant="outline" className={`text-xs whitespace-nowrap ${statusBadgeClass(order.status as OrderStatus)}`}>
+                              {order.status}
+                            </Badge>
+                            <Select
+                              value={order.status}
+                              onValueChange={(val: OrderStatus) => handleStatusChange(order.order_id, val)}
+                            >
+                              <SelectTrigger className="w-[160px] h-7 text-xs mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="verifikasi tugas">Verifikasi Tugas</SelectItem>
+                                <SelectItem value="verifikasi pembayaran">Verifikasi Pembayaran</SelectItem>
+                                <SelectItem value="proses pengerjaan">Proses Pengerjaan</SelectItem>
+                                <SelectItem value="menunggu pelunasan">Menunggu Pelunasan</SelectItem>
+                                <SelectItem value="revisi">Revisi</SelectItem>
+                                <SelectItem value="selesai">Selesai</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
