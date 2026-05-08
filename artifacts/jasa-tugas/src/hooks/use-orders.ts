@@ -4,7 +4,8 @@ export type OrderStatus =
   | "verifikasi tugas"
   | "proses pengerjaan"
   | "menunggu pelunasan"
-  | "verifikasi pembayaran"
+  | "menunggu verifikasi"
+  | "cek file"
   | "revisi"
   | "selesai"
   | "pending"
@@ -19,7 +20,7 @@ export interface Order {
   wa: string;
   jenis: JenisTugas;
   halaman: number;
-  deadline: string;
+  deadline?: string;
   note: string;
   status: OrderStatus;
   tipe_order?: TipeOrder;
@@ -31,6 +32,9 @@ export interface Order {
   bukti_pelunasan_url?: string;
   hasil_url?: string;
   created_at?: string;
+  revisi_catatan?: string;
+  revisi_file_urls?: string;
+  revisi_count?: number;
 }
 
 export interface WaCheckResult {
@@ -137,30 +141,60 @@ export function useUploadBukti() {
   });
 }
 
+export function useSubmitRevisi() {
+  return useMutation({
+    mutationFn: async ({
+      orderId,
+      catatan,
+      files,
+    }: {
+      orderId: string;
+      catatan: string;
+      files: { base64: string; name: string }[];
+    }) => {
+      if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
+      const res = await fetch(GAS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: "submitRevisi", order_id: orderId, catatan, files }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal submit revisi");
+      return json;
+    },
+  });
+}
+
+export function useMarkSelesai() {
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
+      const res = await fetch(GAS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: "markSelesai", order_id: orderId }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal tandai selesai");
+      return json;
+    },
+  });
+}
+
 // ─── Pricing logic ────────────────────────────────────────────
 
 export function hitungHarga(jenis: JenisTugas, halaman: number): number {
   if (jenis === "Makalah" || jenis === "Artikel") {
-    // 1–10 = 30rb, naik 5rb tiap tier 5 halaman
     const tier = Math.max(0, Math.ceil((halaman - 10) / 5));
     return 30000 + tier * 5000;
   }
   if (jenis === "PPT") {
-    // 5 slide = 20rb, +3rb per slide tambahan
     return 20000 + Math.max(0, halaman - 5) * 3000;
   }
   if (jenis === "Tugas Harian") {
-    // 2 lembar = 20rb, +4rb per lembar tambahan
     return 20000 + Math.max(0, halaman - 2) * 4000;
   }
   return 0;
-}
-
-export function hitungDeadline(tipeOrder: TipeOrder, deadlineUser: string): string {
-  const date = new Date(deadlineUser);
-  if (tipeOrder === "super ekspres") date.setDate(date.getDate() - 2);
-  if (tipeOrder === "ekspres") date.setDate(date.getDate() - 1);
-  return date.toISOString().split("T")[0];
 }
 
 export function biayaTambahan(tipeOrder: TipeOrder): number {
@@ -170,5 +204,9 @@ export function biayaTambahan(tipeOrder: TipeOrder): number {
 }
 
 export function formatRupiah(amount: number): string {
-  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(amount);
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(amount);
 }

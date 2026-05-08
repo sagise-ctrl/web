@@ -1,12 +1,10 @@
 // ============================================================
-// JASA TUGAS - Google Apps Script Backend (v2)
+// JASA TUGAS - Google Apps Script Backend (v3)
 // ============================================================
 // CARA DEPLOY:
-// 1. Buka https://script.google.com dan buka project yang sudah ada
-// 2. Hapus semua kode lama, paste seluruh kode ini
-// 3. Pastikan SPREADSHEET_ID sudah benar
-// 4. Klik "Deploy" > "Manage deployments" > edit deployment yang ada
-// 5. Ganti versi ke "New version" lalu klik Deploy
+// 1. Hapus semua kode lama di GAS, paste seluruh kode ini
+// 2. Pastikan SPREADSHEET_ID sudah benar
+// 3. Deploy > Manage deployments > edit > New version > Deploy
 // ============================================================
 
 const SPREADSHEET_ID = "1M46VQj9eGn4_Pn_bg0u4IAcuqnaAekEAHo-yeVXV9Eo";
@@ -29,14 +27,18 @@ const COLUMNS = {
   BUKTI_DP_URL: 14,
   BUKTI_PELUNASAN_URL: 15,
   HASIL_URL: 16,
-  CREATED_AT: 17
+  CREATED_AT: 17,
+  REVISI_CATATAN: 18,
+  REVISI_FILE_URLS: 19,
+  REVISI_COUNT: 20
 };
 
 const VALID_STATUSES = [
   "verifikasi tugas",
   "proses pengerjaan",
   "menunggu pelunasan",
-  "verifikasi pembayaran",
+  "menunggu verifikasi",
+  "cek file",
   "revisi",
   "selesai",
   "pending",
@@ -55,9 +57,10 @@ function getSheet() {
       "deadline", "note", "status", "tipe_order",
       "harga", "dp", "sisa_bayar",
       "file_tugas_url", "bukti_dp_url", "bukti_pelunasan_url",
-      "hasil_url", "created_at"
+      "hasil_url", "created_at",
+      "revisi_catatan", "revisi_file_urls", "revisi_count"
     ]);
-    sheet.getRange(1, 1, 1, 17).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 20).setFontWeight("bold");
   }
   return sheet;
 }
@@ -86,7 +89,10 @@ function rowToObject(row) {
     bukti_dp_url: row[13],
     bukti_pelunasan_url: row[14],
     hasil_url: row[15],
-    created_at: row[16]
+    created_at: row[16],
+    revisi_catatan: row[17],
+    revisi_file_urls: row[18],
+    revisi_count: row[19] || 0
   };
 }
 
@@ -115,6 +121,8 @@ function doPost(e) {
     if (action === "createOrder") return handleCreateOrder(body.data);
     if (action === "updateStatus") return handleUpdateStatus(body.order_id, body.status);
     if (action === "uploadFile") return handleUploadFile(body.order_id, body.tipe, body.fileBase64, body.fileName);
+    if (action === "submitRevisi") return handleSubmitRevisi(body.order_id, body.catatan, body.files);
+    if (action === "markSelesai") return handleMarkSelesai(body.order_id);
     return jsonResponse({ success: false, message: "Action tidak dikenal: " + action });
   } catch (err) {
     return jsonResponse({ success: false, message: "Error: " + err.message });
@@ -122,7 +130,7 @@ function doPost(e) {
 }
 
 // ============================================================
-// Cek apakah nomor WA sudah pernah dipakai
+// Cek nomor WA
 // ============================================================
 function handleCheckWa(wa) {
   if (!wa) return jsonResponse({ success: false, message: "WA diperlukan" });
@@ -140,7 +148,7 @@ function handleCheckWa(wa) {
 // Buat order baru
 // ============================================================
 function handleCreateOrder(data) {
-  if (!data.nama || !data.wa || !data.jenis || !data.halaman || !data.deadline) {
+  if (!data.nama || !data.wa || !data.jenis || !data.halaman) {
     return jsonResponse({ success: false, message: "Data tidak lengkap" });
   }
   if (!VALID_JENIS.includes(data.jenis)) {
@@ -160,18 +168,16 @@ function handleCreateOrder(data) {
     data.wa,
     data.jenis,
     Number(data.halaman),
-    data.deadline,
+    data.deadline || "",
     data.note || "",
     "verifikasi tugas",
     data.tipe_order || "standar",
     harga,
     dp,
     sisa_bayar,
-    "",
-    "",
-    "",
-    "",
-    created_at
+    "", "", "", "",
+    created_at,
+    "", "", 0
   ]);
 
   return jsonResponse({ success: true, order_id: order_id });
@@ -226,6 +232,9 @@ function handleUpdateStatus(order_id, status) {
 
 // ============================================================
 // Upload file ke Google Drive
+// Tipe "hasil" → set status ke "menunggu pelunasan"
+// Tipe "bukti_pelunasan" → set status ke "menunggu verifikasi"
+// Tipe "bukti_dp" → set status ke "menunggu verifikasi"
 // ============================================================
 function handleUploadFile(order_id, tipe, fileBase64, fileName) {
   if (!order_id || !tipe || !fileBase64 || !fileName) {
@@ -261,12 +270,11 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === order_id) {
         sheet.getRange(i + 1, COLUMN_MAP[tipe]).setValue(fileUrl);
-        // Otomatis update status setelah upload bukti pembayaran
-        if (tipe === "bukti_dp") {
-          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("verifikasi pembayaran");
+        if (tipe === "hasil") {
+          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("menunggu pelunasan");
         }
-        if (tipe === "bukti_pelunasan") {
-          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("verifikasi pembayaran");
+        if (tipe === "bukti_dp" || tipe === "bukti_pelunasan") {
+          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("menunggu verifikasi");
         }
         return jsonResponse({ success: true, url: fileUrl });
       }
@@ -275,6 +283,71 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
   } catch (err) {
     return jsonResponse({ success: false, message: "Gagal upload: " + err.message });
   }
+}
+
+// ============================================================
+// Submit revisi (customer)
+// Max 1 kali revisi gratis
+// ============================================================
+function handleSubmitRevisi(order_id, catatan, files) {
+  if (!order_id) return jsonResponse({ success: false, message: "order_id diperlukan" });
+
+  const sheet = getSheet();
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === order_id) {
+      const revisiCount = Number(data[i][19]) || 0;
+      if (revisiCount >= 1) {
+        return jsonResponse({ success: false, message: "Revisi gratis sudah habis (maks 1 kali)" });
+      }
+
+      // Upload revisi files
+      const uploadedUrls = [];
+      if (files && files.length > 0) {
+        const folder = DriveApp.getRootFolder();
+        const subFolder = getOrCreateFolder(folder, "JasaTugas-" + order_id);
+        for (const f of files) {
+          try {
+            const blob = Utilities.newBlob(
+              Utilities.base64Decode(f.base64),
+              getMimeType(f.name),
+              "revisi_" + f.name
+            );
+            const file = subFolder.createFile(blob);
+            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+            uploadedUrls.push(file.getUrl());
+          } catch (e) {
+            // lanjut meski satu file gagal
+          }
+        }
+      }
+
+      sheet.getRange(i + 1, COLUMNS.REVISI_CATATAN).setValue(catatan || "");
+      sheet.getRange(i + 1, COLUMNS.REVISI_FILE_URLS).setValue(uploadedUrls.join(","));
+      sheet.getRange(i + 1, COLUMNS.REVISI_COUNT).setValue(revisiCount + 1);
+      sheet.getRange(i + 1, COLUMNS.STATUS).setValue("revisi");
+
+      return jsonResponse({ success: true, message: "Revisi berhasil diajukan" });
+    }
+  }
+  return jsonResponse({ success: false, message: "Order tidak ditemukan" });
+}
+
+// ============================================================
+// Mark selesai (customer konfirmasi)
+// ============================================================
+function handleMarkSelesai(order_id) {
+  if (!order_id) return jsonResponse({ success: false, message: "order_id diperlukan" });
+  const sheet = getSheet();
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === order_id) {
+      sheet.getRange(i + 1, COLUMNS.STATUS).setValue("selesai");
+      return jsonResponse({ success: true, message: "Order ditandai selesai" });
+    }
+  }
+  return jsonResponse({ success: false, message: "Order tidak ditemukan" });
 }
 
 function getOrCreateFolder(parent, name) {
@@ -293,9 +366,6 @@ function getMimeType(fileName) {
   return types[ext] || "application/octet-stream";
 }
 
-// ============================================================
-// Helper JSON response
-// ============================================================
 function jsonResponse(data) {
   const output = ContentService.createTextOutput(JSON.stringify(data));
   output.setMimeType(ContentService.MimeType.JSON);
