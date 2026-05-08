@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "k6-ahkdf_rIoSxyCtpr0f"
+uri = "file://readme.txt"
+type = "text"
+title = "readme.txt — Panduan File Proyek"
