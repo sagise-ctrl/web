@@ -9,7 +9,7 @@
 // 5. Ganti versi ke "New version" lalu klik Deploy
 // ============================================================
 
-const SPREADSHEET_ID = "GANTI_DENGAN_SPREADSHEET_ID_KAMU";
+const SPREADSHEET_ID = "1M46VQj9eGn4_Pn_bg0u4IAcuqnaAekEAHo-yeVXV9Eo";
 const SHEET_NAME = "Orders";
 
 const COLUMNS = {
