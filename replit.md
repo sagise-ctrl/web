@@ -1,45 +1,64 @@
-# [Project name]
+# Jasa Tugas
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Platform pemesanan jasa tugas akademik untuk mahasiswa Indonesia — order makalah, PPT, dan artikel ilmiah dengan tracking status real-time.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/jasa-tugas run dev` — jalankan frontend (port dari env PORT)
+- `pnpm --filter @workspace/api-server run dev` — jalankan API server (port 5000, tidak dipakai aktif)
+- `pnpm run typecheck` — full typecheck semua package
+- `pnpm run build` — typecheck + build semua package
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Frontend: React + Vite + Tailwind CSS + shadcn/ui
+- Routing: wouter
+- Forms: react-hook-form + zod
+- Data fetching: TanStack Query
+- Backend: Google Apps Script + Google Sheets (eksternal)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/jasa-tugas/src/pages/` — halaman utama (home, order, track, admin)
+- `artifacts/jasa-tugas/src/hooks/use-orders.ts` — semua fungsi API call ke Google Apps Script
+- `artifacts/jasa-tugas/src/components/layout.tsx` — navbar, footer, warning banner
+- `google-apps-script/Code.gs` — kode backend Google Apps Script (deploy manual ke GAS)
+- `VITE_GAS_URL` — env var untuk URL Google Apps Script (diisi setelah deploy GAS)
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Backend eksternal via Google Apps Script — tidak perlu server/database Replit, data tersimpan di Google Sheets
+- Semua API call menggunakan raw `fetch` (bukan Orval hooks) karena endpoint eksternal
+- Admin auth disederhanakan dengan password lokal (hardcoded "admin123") — cukup untuk MVP
+- VITE_GAS_URL sebagai env var agar URL GAS bisa diganti tanpa rebuild
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- `/` — Landing page dengan CTA
+- `/order` — Form pemesanan tugas (nama, WA, jenis, halaman, deadline, catatan)
+- `/track` — Cek status order berdasarkan order_id
+- `/admin` — Dashboard admin untuk lihat semua order dan update status (password: admin123)
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Bahasa Indonesia di seluruh UI
+- Fokus MVP: order, track, admin — tanpa payment/upload file
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Sebelum app bisa dipakai end-to-end, HARUS deploy Google Apps Script dulu dan isi `VITE_GAS_URL`
+- Google Apps Script harus di-deploy dengan akses "Anyone" agar bisa diakses dari browser
+- CORS di GAS sudah ditangani otomatis oleh ContentService
+- Setelah ganti `VITE_GAS_URL`, restart workflow frontend agar env var terbaca
 
-## Pointers
+## Setup Google Apps Script (Langkah-langkah)
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+1. Buka https://script.google.com → buat project baru
+2. Copy paste isi `google-apps-script/Code.gs`
+3. Ganti `SPREADSHEET_ID` dengan ID Google Sheets kamu
+4. Klik **Deploy** → **New deployment** → tipe: **Web app**
+5. Execute as: **Me**, Who has access: **Anyone**
+6. Klik **Deploy**, copy URL-nya
+7. Di Replit: buka **Secrets/Env vars** → set `VITE_GAS_URL` = URL tersebut
+8. Restart workflow frontend
