@@ -2,6 +2,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 
 export type OrderStatus =
   | "verifikasi tugas"
+  | "pembayaran awal"
+  | "verifikasi pembayaran awal"
   | "proses pengerjaan"
   | "menunggu pelunasan"
   | "menunggu verifikasi"

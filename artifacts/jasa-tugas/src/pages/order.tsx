@@ -14,14 +14,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
-  useCreateOrder, useCheckWa, useUploadBukti,
+  useCreateOrder, useCheckWa,
   hitungHarga, biayaTambahan, formatRupiah,
   type JenisTugas, type TipeOrder,
 } from "@/hooks/use-orders";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertCircle, CheckCircle, Copy, Loader2, User, FileText,
-  ClipboardList, CreditCard, ChevronRight, ChevronLeft, Upload,
+  ClipboardList, CreditCard, ChevronRight, ChevronLeft,
 } from "lucide-react";
 
 // ─── Schemas ──────────────────────────────────────────────────
@@ -40,22 +40,15 @@ const step2Schema = z.object({
 type Step1Values = z.infer<typeof step1Schema>;
 type Step2Values = z.infer<typeof step2Schema>;
 
-// ─── Helpers ──────────────────────────────────────────────────
 function halamanOptions(jenis: JenisTugas) {
   if (jenis === "Makalah" || jenis === "Artikel") {
-    const opts = [];
-    for (let i = 10; i <= 80; i += 5) opts.push(i);
-    return opts;
+    const opts = []; for (let i = 10; i <= 80; i += 5) opts.push(i); return opts;
   }
   if (jenis === "PPT") {
-    const opts = [];
-    for (let i = 5; i <= 20; i++) opts.push(i);
-    return opts;
+    const opts = []; for (let i = 5; i <= 20; i++) opts.push(i); return opts;
   }
   if (jenis === "Tugas Harian") {
-    const opts = [];
-    for (let i = 2; i <= 15; i++) opts.push(i);
-    return opts;
+    const opts = []; for (let i = 2; i <= 15; i++) opts.push(i); return opts;
   }
   return [];
 }
@@ -65,7 +58,7 @@ function StepIndicator({ current }: { current: number }) {
     { label: "Data Diri", icon: User },
     { label: "Detail Tugas", icon: FileText },
     { label: "Ringkasan", icon: ClipboardList },
-    { label: "Pembayaran", icon: CreditCard },
+    { label: "Selesai", icon: CheckCircle },
   ];
   return (
     <div className="flex items-center justify-center gap-0 mb-8">
@@ -99,19 +92,13 @@ export default function OrderPage() {
   const { toast } = useToast();
   const createOrder = useCreateOrder();
   const checkWa = useCheckWa();
-  const uploadBukti = useUploadBukti();
 
   const [step, setStep] = useState(1);
-  // WA warning state: null = no warning, string = warning message shown, needs confirmation
   const [waWarning, setWaWarning] = useState<string | null>(null);
-  const [waConfirmed, setWaConfirmed] = useState(false);
   const [pendingStep1Data, setPendingStep1Data] = useState<Step1Values | null>(null);
-
   const [step1Data, setStep1Data] = useState<Step1Values | null>(null);
   const [step2Data, setStep2Data] = useState<Step2Values | null>(null);
   const [successOrderId, setSuccessOrderId] = useState<string | null>(null);
-  const [buktiFile, setBuktiFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
 
   const form1 = useForm<Step1Values>({
     resolver: zodResolver(step1Schema),
@@ -129,32 +116,21 @@ export default function OrderPage() {
   const watchedNote = form2.watch("note") || "";
 
   const dp = 10000;
-  const hargaDasar = step2Data ? hitungHarga(step2Data.jenis, step2Data.halaman) : 0;
-  const tambahan = step2Data ? biayaTambahan(step2Data.tipe_order as TipeOrder) : 0;
-  const totalHarga = hargaDasar + tambahan;
-  const sisaBayar = Math.max(0, totalHarga - dp);
 
-  // ─── Step 1: cek WA ─────────────────────────────────────────
+  // ─── Step 1: cek WA ────────────────────────────────────────
   async function onStep1Submit(data: Step1Values) {
     setWaWarning(null);
-    setWaConfirmed(false);
-
     try {
       const result = await checkWa.mutateAsync(data.wa);
       if (result.exists && result.nama_sebelumnya) {
         const namaLama = result.nama_sebelumnya;
-        const namaBeda = namaLama.toLowerCase() !== data.nama.toLowerCase();
-        if (namaBeda) {
-          // Blok, tampilkan peringatan, tunggu konfirmasi user
+        if (namaLama.toLowerCase() !== data.nama.toLowerCase()) {
           setPendingStep1Data(data);
-          setWaWarning(`Nomor WhatsApp ini sudah terdaftar dengan nama "${namaLama}". Apakah Anda ingin melanjutkan dengan nama berbeda?`);
+          setWaWarning(`Nomor WhatsApp ini sudah terdaftar dengan nama "${namaLama}". Ingin lanjutkan dengan nama berbeda?`);
           return;
         }
       }
-    } catch {
-      // Jika gagal cek, tetap lanjutkan
-    }
-
+    } catch { /* lanjutkan jika cek gagal */ }
     setStep1Data(data);
     setStep(2);
   }
@@ -163,17 +139,16 @@ export default function OrderPage() {
     if (!pendingStep1Data) return;
     setStep1Data(pendingStep1Data);
     setWaWarning(null);
-    setWaConfirmed(true);
     setStep(2);
   }
 
-  // ─── Step 2 submit ─────────────────────────────────────────
+  // ─── Step 2 ────────────────────────────────────────────────
   function onStep2Submit(data: Step2Values) {
     setStep2Data(data);
     setStep(3);
   }
 
-  // ─── Step 3 → buat order ───────────────────────────────────
+  // ─── Step 3: konfirmasi & kirim order ──────────────────────
   async function onConfirmOrder() {
     if (!step1Data || !step2Data) return;
     const hargaFinal = hitungHarga(step2Data.jenis, step2Data.halaman) + biayaTambahan(step2Data.tipe_order as TipeOrder);
@@ -197,36 +172,6 @@ export default function OrderPage() {
     }
   }
 
-  // ─── Step 4: upload bukti DP ──────────────────────────────
-  async function onUploadBukti() {
-    if (!buktiFile || !successOrderId) return;
-    setUploading(true);
-    try {
-      const base64 = await fileToBase64(buktiFile);
-      await uploadBukti.mutateAsync({
-        orderId: successOrderId,
-        tipe: "bukti_dp",
-        fileBase64: base64,
-        fileName: buktiFile.name,
-      });
-      toast({ title: "Bukti DP terkirim!", description: "Admin akan memverifikasi pembayaran Anda." });
-      setBuktiFile(null);
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Gagal Upload", description: error.message });
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
     toast({ title: "Tersalin!", description: "Order ID berhasil disalin." });
@@ -234,91 +179,69 @@ export default function OrderPage() {
 
   function resetAll() {
     setStep(1); setSuccessOrderId(null); setStep1Data(null); setStep2Data(null);
-    setWaWarning(null); setPendingStep1Data(null); setBuktiFile(null);
+    setWaWarning(null); setPendingStep1Data(null);
     form1.reset(); form2.reset();
   }
 
-  // ─── Step 4: Pembayaran DP ─────────────────────────────────
+  // ─── Step 4: Sukses — tunggu verifikasi admin ──────────────
   if (step === 4 && successOrderId) {
-    const dpDone = uploadBukti.isSuccess;
     return (
       <Layout>
         <div className="max-w-2xl mx-auto py-8 space-y-6">
           <StepIndicator current={4} />
-          <Card className="border-blue-200">
+          <Card className="border-green-200">
             <CardHeader className="text-center">
-              <div className="mx-auto w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mb-3">
-                <CreditCard className="w-7 h-7 text-blue-600" />
+              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-3">
+                <CheckCircle className="w-9 h-9 text-green-600" />
               </div>
-              <CardTitle className="text-2xl">Pembayaran DP</CardTitle>
-              <CardDescription>Bayar DP {formatRupiah(dp)} untuk mengkonfirmasi pesanan Anda.</CardDescription>
+              <CardTitle className="text-2xl text-green-800">Order Berhasil Dikirim!</CardTitle>
+              <CardDescription className="text-green-700">
+                Pesanan Anda sudah masuk dan sedang menunggu verifikasi admin.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-600">Order ID</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900 text-sm">{successOrderId}</span>
-                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => copyToClipboard(successOrderId)}>
-                    <Copy className="h-3 w-3" />
+              {/* Order ID */}
+              <div className="bg-slate-50 rounded-xl p-5 text-center border border-slate-200">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Order ID Anda</p>
+                <div className="flex items-center justify-center gap-3">
+                  <span className="text-xl font-bold tracking-wider text-slate-900">{successOrderId}</span>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => copyToClipboard(successOrderId)}>
+                    <Copy className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
-                <p className="text-sm font-medium text-amber-700 mb-3">Scan QRIS untuk Pembayaran DP</p>
-                <div className="bg-white border-2 border-dashed border-amber-300 rounded-lg p-8 mx-auto max-w-[200px] flex flex-col items-center gap-2">
-                  <div className="w-16 h-16 bg-slate-200 rounded flex items-center justify-center">
-                    <CreditCard className="w-8 h-8 text-slate-400" />
-                  </div>
-                  <p className="text-xs text-slate-500 text-center">Upload gambar QRIS ke <code>public/qris.png</code></p>
-                </div>
-                <p className="text-lg font-bold text-amber-800 mt-3">DP: {formatRupiah(dp)}</p>
-                <p className="text-xs text-amber-600">Sisa {formatRupiah(sisaBayar)} dibayar setelah tugas selesai</p>
+              {/* Alur selanjutnya */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                <p className="text-sm font-semibold text-blue-800">Langkah Selanjutnya:</p>
+                <ol className="space-y-2">
+                  {[
+                    "Admin memverifikasi detail pesanan Anda",
+                    "Anda akan diminta membayar DP melalui halaman tracking",
+                    "Admin memverifikasi DP dan mulai mengerjakan tugas",
+                    "Setelah selesai, bayar pelunasan untuk mengunduh hasil",
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-blue-700">
+                      <span className="w-5 h-5 rounded-full bg-blue-200 text-blue-800 flex-shrink-0 flex items-center justify-center text-xs font-bold mt-0.5">
+                        {i + 1}
+                      </span>
+                      {item}
+                    </li>
+                  ))}
+                </ol>
               </div>
-
-              {!dpDone ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-slate-700">Upload bukti transfer DP (JPG/PDF):</p>
-                  <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:border-primary transition-colors flex flex-col items-center gap-2">
-                    {buktiFile ? (
-                      <div className="flex items-center gap-2 text-green-700">
-                        <CheckCircle className="w-5 h-5" />
-                        <span className="text-sm font-medium">{buktiFile.name}</span>
-                      </div>
-                    ) : (
-                      <>
-                        <Upload className="w-8 h-8 text-slate-400" />
-                        <p className="text-sm text-slate-500">Klik untuk pilih file JPG atau PDF</p>
-                      </>
-                    )}
-                    <input type="file" accept=".jpg,.jpeg,.pdf" className="hidden"
-                      onChange={(e) => setBuktiFile(e.target.files?.[0] || null)} />
-                  </label>
-                  <Button className="w-full" disabled={!buktiFile || uploading} onClick={onUploadBukti}>
-                    {uploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Mengupload...</> : "Kirim Bukti Transfer DP"}
-                  </Button>
-                </div>
-              ) : (
-                <Alert className="bg-green-50 border-green-200">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <AlertTitle className="text-green-800">Bukti DP Terkirim!</AlertTitle>
-                  <AlertDescription className="text-green-700">
-                    Admin sedang memverifikasi pembayaran. Cek status di halaman tracking.
-                  </AlertDescription>
-                </Alert>
-              )}
 
               <Alert className="bg-yellow-50 border-yellow-200">
                 <AlertCircle className="h-4 w-4 text-yellow-600" />
                 <AlertTitle className="text-yellow-800">Simpan Order ID Anda!</AlertTitle>
                 <AlertDescription className="text-yellow-700">
-                  Gunakan Order ID <strong>{successOrderId}</strong> untuk melacak status pesanan.
+                  Gunakan Order ID <strong>{successOrderId}</strong> untuk memantau status pesanan di halaman tracking.
                 </AlertDescription>
               </Alert>
 
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => window.location.href = `/track?id=${successOrderId}`}>
-                  Lacak Order
+                <Button className="flex-1" onClick={() => window.location.href = `/track?id=${successOrderId}`}>
+                  Pantau Status Order
                 </Button>
                 <Button variant="outline" className="flex-1" onClick={resetAll}>
                   Order Baru
@@ -354,7 +277,7 @@ export default function OrderPage() {
                 <Row label="Nama" value={step1Data.nama} />
                 <Row label="WhatsApp" value={step1Data.wa} />
                 <Row label="Jenis Tugas" value={jenis} />
-                <Row label="Jumlah Halaman/Slide/Lembar" value={`${halaman}`} />
+                <Row label="Jumlah" value={`${halaman} ${jenis === "PPT" ? "slide" : jenis === "Tugas Harian" ? "lembar" : "halaman"}`} />
                 <Row label="Tipe Layanan" value={
                   <Badge variant={tipe === "standar" ? "secondary" : tipe === "ekspres" ? "outline" : "destructive"} className="capitalize">{tipe}</Badge>
                 } />
@@ -378,11 +301,11 @@ export default function OrderPage() {
                   <span className="text-primary">{formatRupiah(hTotal)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-slate-500 pt-1">
-                  <span>DP sekarang</span>
+                  <span>DP (dibayar setelah verifikasi admin)</span>
                   <span>{formatRupiah(dp)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-slate-500">
-                  <span>Sisa bayar setelah selesai</span>
+                  <span>Sisa bayar setelah tugas selesai</span>
                   <span>{formatRupiah(Math.max(0, hTotal - dp))}</span>
                 </div>
               </div>
@@ -394,7 +317,7 @@ export default function OrderPage() {
                 <Button className="flex-1" onClick={onConfirmOrder} disabled={createOrder.isPending}>
                   {createOrder.isPending
                     ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Memproses...</>
-                    : <>Konfirmasi & Bayar DP <ChevronRight className="w-4 h-4 ml-1" /></>}
+                    : <>Kirim Order <ChevronRight className="w-4 h-4 ml-1" /></>}
                 </Button>
               </div>
             </CardContent>
@@ -404,7 +327,7 @@ export default function OrderPage() {
     );
   }
 
-  // ─── Step 2: Detail Tugas ─────────────────────────────────
+  // ─── Step 2: Detail Tugas ──────────────────────────────────
   if (step === 2) {
     const opts = watchedJenis ? halamanOptions(watchedJenis) : [];
     const hPreview = watchedJenis
@@ -427,14 +350,11 @@ export default function OrderPage() {
                   <FormField control={form2.control} name="jenis" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Jenis Tugas</FormLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={(val) => {
-                          field.onChange(val);
-                          const opts2 = halamanOptions(val as JenisTugas);
-                          form2.setValue("halaman", opts2[0] || 1);
-                        }}
-                      >
+                      <Select value={field.value} onValueChange={(val) => {
+                        field.onChange(val);
+                        const o = halamanOptions(val as JenisTugas);
+                        form2.setValue("halaman", o[0] || 1);
+                      }}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Pilih jenis tugas" /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="Makalah">Makalah</SelectItem>
@@ -523,7 +443,7 @@ export default function OrderPage() {
     );
   }
 
-  // ─── Step 1: Data Diri ─────────────────────────────────────
+  // ─── Step 1: Data Diri ────────────────────────────────────
   return (
     <Layout>
       <div className="max-w-2xl mx-auto py-8">
@@ -537,7 +457,6 @@ export default function OrderPage() {
             <Form {...form1}>
               <form onSubmit={form1.handleSubmit(onStep1Submit)} className="space-y-5">
 
-                {/* WA Warning — block progress, require confirmation */}
                 {waWarning && (
                   <Alert className="bg-yellow-50 border-yellow-300">
                     <AlertCircle className="h-4 w-4 text-yellow-600" />
@@ -545,21 +464,14 @@ export default function OrderPage() {
                     <AlertDescription className="text-yellow-700 space-y-3">
                       <p>{waWarning}</p>
                       <div className="flex gap-2 pt-1">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
+                        <Button type="button" size="sm" variant="outline"
                           className="border-yellow-400 text-yellow-800 hover:bg-yellow-100"
-                          onClick={() => { setWaWarning(null); setPendingStep1Data(null); }}
-                        >
+                          onClick={() => { setWaWarning(null); setPendingStep1Data(null); }}>
                           Ganti Nama/WA
                         </Button>
-                        <Button
-                          type="button"
-                          size="sm"
+                        <Button type="button" size="sm"
                           className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                          onClick={onWaConfirm}
-                        >
+                          onClick={onWaConfirm}>
                           Lanjutkan Tetap
                         </Button>
                       </div>
