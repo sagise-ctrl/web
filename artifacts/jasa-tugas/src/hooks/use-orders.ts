@@ -112,6 +112,8 @@ export function useGetOrder(orderId: string) {
       return json.data as Order;
     },
     enabled: !!orderId,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -125,6 +127,8 @@ export function useGetAllOrders() {
       if (!json.success) throw new Error(json.message || "Gagal mengambil daftar order");
       return json.data as Order[];
     },
+    refetchInterval: 20000,
+    refetchIntervalInBackground: false,
   });
 }
 
