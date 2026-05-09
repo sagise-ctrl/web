@@ -21,7 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertCircle, CheckCircle, Copy, Loader2, User, FileText,
-  ClipboardList, CreditCard, ChevronRight, ChevronLeft,
+  ClipboardList, ChevronRight, ChevronLeft,
 } from "lucide-react";
 
 // ─── Schemas ──────────────────────────────────────────────────
@@ -39,7 +39,7 @@ const step2Schema = z.object({
 type Step1Values = z.infer<typeof step1Schema>;
 type Step2Values = z.infer<typeof step2Schema>;
 
-const WA_STORAGE_KEY = (wa: string) => `jt_wa_${wa}`;
+const WA_KEY = (wa: string) => `jt_wa_${wa}`;
 
 function halamanOptions(jenis: JenisTugas) {
   if (jenis === "Makalah" || jenis === "Artikel") {
@@ -77,7 +77,9 @@ function StepIndicator({ current }: { current: number }) {
           <React.Fragment key={i}>
             <div className="flex flex-col items-center">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all
-                ${done ? "bg-primary border-primary text-white" : active ? "bg-primary border-primary text-white scale-110" : "bg-white border-slate-200 text-slate-400"}`}>
+                ${done ? "bg-primary border-primary text-white"
+                  : active ? "bg-primary border-primary text-white scale-110"
+                  : "bg-white border-slate-200 text-slate-400"}`}>
                 {done ? <CheckCircle className="w-5 h-5" /> : <Icon className="w-4 h-4" />}
               </div>
               <span className={`text-xs mt-1 font-medium ${active ? "text-primary" : done ? "text-slate-600" : "text-slate-400"}`}>
@@ -101,13 +103,17 @@ export default function OrderPage() {
   const checkWa = useCheckWa();
 
   const [step, setStep] = useState(1);
+
+  // WA warning state
   const [waWarning, setWaWarning] = useState<string | null>(null);
-  const [pendingStep1Data, setPendingStep1Data] = useState<Step1Values | null>(null);
+  const [namaLama, setNamaLama] = useState<string | null>(null);
+  const [waLama, setWaLama] = useState<string | null>(null);
+
   const [step1Data, setStep1Data] = useState<Step1Values | null>(null);
-  const [step2Data, setStep2Data] = useState<Step2Values | null>(null);
+  const [step2Data, setStep2Data] = useState<(Step2Values & { tipe_order: TipeOrder }) | null>(null);
   const [successOrderId, setSuccessOrderId] = useState<string | null>(null);
 
-  // ── tipe_order stored in state (not form) so it NEVER resets ──
+  // tipe_order lives in state (not form) — never resets on re-render
   const [selectedTipe, setSelectedTipe] = useState<TipeOrder>("standar");
 
   const form1 = useForm<Step1Values>({
@@ -123,8 +129,8 @@ export default function OrderPage() {
   const watchedJenis = form2.watch("jenis") as JenisTugas | undefined;
   const watchedHalaman = form2.watch("halaman");
   const watchedNote = form2.watch("note") || "";
-
   const dp = 10000;
+
   const hargaPreview = watchedJenis
     ? hitungHarga(watchedJenis, watchedHalaman || halamanOptions(watchedJenis)[0] || 1) + biayaTambahan(selectedTipe)
     : 0;
@@ -132,71 +138,81 @@ export default function OrderPage() {
   // ─── Step 1: cek WA ─────────────────────────────────────────
   async function onStep1Submit(data: Step1Values) {
     setWaWarning(null);
+    setNamaLama(null);
+    setWaLama(null);
 
-    // 1) Cek localStorage dulu (bekerja tanpa GAS)
-    const savedNama = localStorage.getItem(WA_STORAGE_KEY(data.wa));
-    if (savedNama && savedNama.toLowerCase() !== data.nama.toLowerCase()) {
-      setPendingStep1Data(data);
-      setWaWarning(`Nomor WA ini sudah terdaftar dengan nama "${savedNama}". Ingin lanjutkan dengan nama berbeda?`);
-      return;
-    }
+    // Cek localStorage (bekerja tanpa GAS)
+    let foundNamaLama: string | null = localStorage.getItem(WA_KEY(data.wa));
 
-    // 2) Cek GAS jika URL tersedia
-    if (import.meta.env.VITE_GAS_URL) {
+    // Jika belum ada di localStorage, coba GAS
+    if (!foundNamaLama && import.meta.env.VITE_GAS_URL) {
       try {
         const result = await checkWa.mutateAsync(data.wa);
         if (result.exists && result.nama_sebelumnya) {
-          const namaLama = result.nama_sebelumnya;
-          // Simpan ke localStorage untuk cek berikutnya
-          localStorage.setItem(WA_STORAGE_KEY(data.wa), namaLama);
-          if (namaLama.toLowerCase() !== data.nama.toLowerCase()) {
-            setPendingStep1Data(data);
-            setWaWarning(`Nomor WA ini sudah terdaftar dengan nama "${namaLama}". Ingin lanjutkan dengan nama berbeda?`);
-            return;
-          }
+          foundNamaLama = result.nama_sebelumnya;
+          localStorage.setItem(WA_KEY(data.wa), foundNamaLama);
         }
-      } catch {
-        // GAS tidak tersedia — lanjutkan
-      }
+      } catch { /* GAS tidak tersedia */ }
     }
 
+    // Jika nomor WA sama tapi nama berbeda → tampilkan peringatan
+    if (foundNamaLama && foundNamaLama.toLowerCase() !== data.nama.toLowerCase()) {
+      setNamaLama(foundNamaLama);
+      setWaLama(data.wa);
+      setWaWarning(
+        `Nomor WhatsApp ${data.wa} sudah terdaftar atas nama "${foundNamaLama}".`
+      );
+      return; // Blokir — tunggu pilihan customer
+    }
+
+    // Lolos validasi
     setStep1Data(data);
     setStep(2);
   }
 
-  function onWaConfirm() {
-    if (!pendingStep1Data) return;
-    setStep1Data(pendingStep1Data);
+  // Pilihan 1: Ganti nomor WA
+  function onGantiWa() {
     setWaWarning(null);
+    setNamaLama(null);
+    setWaLama(null);
+    form1.setValue("wa", "");
+    form1.setFocus("wa");
+  }
+
+  // Pilihan 2: Pakai data lama (nama & WA yang sudah terdaftar)
+  function onPakaiDataLama() {
+    if (!namaLama || !waLama) return;
+    setStep1Data({ nama: namaLama, wa: waLama });
+    setWaWarning(null);
+    setNamaLama(null);
+    setWaLama(null);
     setStep(2);
   }
 
   // ─── Step 2 ──────────────────────────────────────────────────
   function onStep2Submit(data: Step2Values) {
-    // tipe_order diambil dari state terpisah, bukan form
-    setStep2Data({ ...data, tipe_order: selectedTipe } as any);
+    setStep2Data({ ...data, tipe_order: selectedTipe });
     setStep(3);
   }
 
   // ─── Step 3: kirim order ─────────────────────────────────────
   async function onConfirmOrder() {
     if (!step1Data || !step2Data) return;
-    const tipe = selectedTipe;
-    const hargaFinal = hitungHarga((step2Data as any).jenis, (step2Data as any).halaman) + biayaTambahan(tipe);
+    const hargaFinal =
+      hitungHarga(step2Data.jenis, step2Data.halaman) + biayaTambahan(step2Data.tipe_order);
     try {
       const res = await createOrder.mutateAsync({
         nama: step1Data.nama,
         wa: step1Data.wa,
-        jenis: (step2Data as any).jenis,
-        halaman: (step2Data as any).halaman,
-        note: (step2Data as any).note || "",
-        tipe_order: tipe,
+        jenis: step2Data.jenis,
+        halaman: step2Data.halaman,
+        note: step2Data.note || "",
+        tipe_order: step2Data.tipe_order,
         harga: hargaFinal,
         dp,
         sisa_bayar: Math.max(0, hargaFinal - dp),
       } as any);
-      // Simpan WA → nama ke localStorage untuk validasi berikutnya
-      localStorage.setItem(WA_STORAGE_KEY(step1Data.wa), step1Data.nama);
+      localStorage.setItem(WA_KEY(step1Data.wa), step1Data.nama);
       setSuccessOrderId(res.order_id);
       setStep(4);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -212,7 +228,8 @@ export default function OrderPage() {
 
   function resetAll() {
     setStep(1); setSuccessOrderId(null); setStep1Data(null); setStep2Data(null);
-    setWaWarning(null); setPendingStep1Data(null); setSelectedTipe("standar");
+    setWaWarning(null); setNamaLama(null); setWaLama(null);
+    setSelectedTipe("standar");
     form1.reset(); form2.reset();
   }
 
@@ -287,9 +304,7 @@ export default function OrderPage() {
 
   // ─── Step 3: Ringkasan ────────────────────────────────────────
   if (step === 3 && step1Data && step2Data) {
-    const jenis = (step2Data as any).jenis as JenisTugas;
-    const halaman = (step2Data as any).halaman as number;
-    const tipe = selectedTipe;
+    const { jenis, halaman, tipe_order: tipe, note } = step2Data;
     const hDasar = hitungHarga(jenis, halaman);
     const hTambahan = biayaTambahan(tipe);
     const hTotal = hDasar + hTambahan;
@@ -305,14 +320,14 @@ export default function OrderPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 overflow-hidden">
-                <SummaryRow label="Nama" value={step1Data.nama} />
-                <SummaryRow label="WhatsApp" value={step1Data.wa} />
-                <SummaryRow label="Jenis Tugas" value={jenis} />
-                <SummaryRow label="Jumlah" value={`${halaman} ${jenis === "PPT" ? "slide" : jenis === "Tugas Harian" ? "lembar" : "halaman"}`} />
-                <SummaryRow label="Tipe Layanan" value={
+                <SRow label="Nama" value={step1Data.nama} />
+                <SRow label="WhatsApp" value={step1Data.wa} />
+                <SRow label="Jenis Tugas" value={jenis} />
+                <SRow label="Jumlah" value={`${halaman} ${jenis === "PPT" ? "slide" : jenis === "Tugas Harian" ? "lembar" : "halaman"}`} />
+                <SRow label="Tipe Layanan" value={
                   <Badge variant={tipe === "standar" ? "secondary" : tipe === "ekspres" ? "outline" : "destructive"} className="capitalize">{tipe}</Badge>
                 } />
-                {(step2Data as any).note && <SummaryRow label="Catatan" value={(step2Data as any).note} />}
+                {note && <SRow label="Catatan" value={note} />}
               </div>
 
               <div className="bg-slate-50 rounded-xl p-4 space-y-2">
@@ -375,18 +390,13 @@ export default function OrderPage() {
               <Form {...form2}>
                 <form onSubmit={form2.handleSubmit(onStep2Submit)} className="space-y-5">
 
-                  {/* Jenis */}
                   <FormField control={form2.control} name="jenis" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Jenis Tugas</FormLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={(val) => {
-                          field.onChange(val);
-                          const o = halamanOptions(val as JenisTugas);
-                          form2.setValue("halaman", o[0] || 1);
-                        }}
-                      >
+                      <Select value={field.value} onValueChange={(val) => {
+                        field.onChange(val);
+                        form2.setValue("halaman", halamanOptions(val as JenisTugas)[0] || 1);
+                      }}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Pilih jenis tugas" /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="Makalah">Makalah</SelectItem>
@@ -399,7 +409,6 @@ export default function OrderPage() {
                     </FormItem>
                   )} />
 
-                  {/* Halaman */}
                   {watchedJenis && (
                     <FormField control={form2.control} name="halaman" render={({ field }) => (
                       <FormItem>
@@ -421,11 +430,9 @@ export default function OrderPage() {
                     )} />
                   )}
 
-                  {/* Tipe layanan — dikelola via state terpisah, bukan form field */}
+                  {/* Tipe layanan — state terpisah, tidak reset */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                      Tipe Layanan
-                    </label>
+                    <label className="text-sm font-medium leading-none">Tipe Layanan</label>
                     <Select value={selectedTipe} onValueChange={(val) => setSelectedTipe(val as TipeOrder)}>
                       <SelectTrigger>
                         <SelectValue />
@@ -438,7 +445,6 @@ export default function OrderPage() {
                     </Select>
                   </div>
 
-                  {/* Catatan */}
                   <FormField control={form2.control} name="note" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Catatan Tambahan (Opsional)</FormLabel>
@@ -455,7 +461,6 @@ export default function OrderPage() {
                     </FormItem>
                   )} />
 
-                  {/* Estimasi harga */}
                   {watchedJenis && (
                     <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex justify-between items-center">
                       <span className="text-sm font-medium text-slate-700">Estimasi Harga</span>
@@ -494,29 +499,6 @@ export default function OrderPage() {
             <Form {...form1}>
               <form onSubmit={form1.handleSubmit(onStep1Submit)} className="space-y-5">
 
-                {/* Peringatan WA — blokir progres, minta konfirmasi */}
-                {waWarning && (
-                  <Alert className="bg-yellow-50 border-yellow-300">
-                    <AlertCircle className="h-4 w-4 text-yellow-600" />
-                    <AlertTitle className="text-yellow-800">Nomor WA Sudah Terdaftar</AlertTitle>
-                    <AlertDescription className="text-yellow-700 space-y-3">
-                      <p>{waWarning}</p>
-                      <div className="flex gap-2 pt-1">
-                        <Button type="button" size="sm" variant="outline"
-                          className="border-yellow-400 text-yellow-800 hover:bg-yellow-100"
-                          onClick={() => { setWaWarning(null); setPendingStep1Data(null); }}>
-                          Ganti Nama / WA
-                        </Button>
-                        <Button type="button" size="sm"
-                          className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                          onClick={onWaConfirm}>
-                          Lanjutkan Tetap
-                        </Button>
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-                )}
-
                 <FormField control={form1.control} name="nama" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nama Lengkap</FormLabel>
@@ -534,6 +516,36 @@ export default function OrderPage() {
                   </FormItem>
                 )} />
 
+                {/* Peringatan WA sudah terdaftar */}
+                {waWarning && (
+                  <Alert className="bg-yellow-50 border-yellow-400">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <AlertTitle className="text-yellow-900 font-semibold">Nomor WA Sudah Terdaftar</AlertTitle>
+                    <AlertDescription className="text-yellow-800 space-y-4 mt-1">
+                      <p>{waWarning}</p>
+                      <p className="text-sm">Silakan pilih salah satu:</p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1 border-yellow-500 text-yellow-900 hover:bg-yellow-100"
+                          onClick={onGantiWa}
+                        >
+                          Ganti Nomor WA
+                        </Button>
+                        <Button
+                          type="button"
+                          className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white"
+                          onClick={onPakaiDataLama}
+                        >
+                          Pakai Data Lama
+                          {namaLama && <span className="ml-1 opacity-80 text-xs">({namaLama})</span>}
+                        </Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {!waWarning && (
                   <Button type="submit" className="w-full" disabled={checkWa.isPending}>
                     {checkWa.isPending
@@ -550,7 +562,7 @@ export default function OrderPage() {
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+function SRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between px-4 py-3 gap-4">
       <span className="text-sm text-slate-500 flex-shrink-0">{label}</span>

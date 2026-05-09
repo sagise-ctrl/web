@@ -3,16 +3,19 @@ import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LockKeyhole, RefreshCw, Loader2, ExternalLink, Upload, CheckCircle, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  LockKeyhole, RefreshCw, Loader2, ExternalLink, Upload,
+  CheckCircle, X, ChevronRight, Clock,
+} from "lucide-react";
 import {
   useGetAllOrders, useUpdateOrder, useUploadBukti,
-  type OrderStatus, formatRupiah,
+  type Order, type OrderStatus, formatRupiah,
 } from "@/hooks/use-orders";
 import { useToast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 
+// ─── Status badge colour ───────────────────────────────────────
 function statusCls(status: string) {
   const map: Record<string, string> = {
     "verifikasi tugas":           "bg-orange-50 text-orange-700 border-orange-200",
@@ -28,6 +31,20 @@ function statusCls(status: string) {
   return map[status] || "bg-slate-50 text-slate-700 border-slate-200";
 }
 
+// ─── Status label ──────────────────────────────────────────────
+const STATUS_LABEL: Record<string, string> = {
+  "verifikasi tugas":           "Verifikasi Tugas",
+  "pembayaran awal":            "Pembayaran Awal",
+  "verifikasi pembayaran awal": "Verifikasi Pembayaran Awal",
+  "proses pengerjaan":          "Proses Pengerjaan",
+  "menunggu pelunasan":         "Menunggu Pelunasan",
+  "menunggu verifikasi":        "Menunggu Verifikasi",
+  "cek file":                   "Cek File",
+  "revisi":                     "Revisi",
+  "selesai":                    "Selesai",
+};
+
+// ─── Helpers ───────────────────────────────────────────────────
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -37,19 +54,12 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// ─── Dialog upload file ────────────────────────────────────────
-function UploadFileDialog({
-  orderId,
-  title,
-  description,
-  onSuccess,
-  onCancel,
+// ─── Upload Dialog ─────────────────────────────────────────────
+function UploadDialog({
+  orderId, title, description, onSuccess, onCancel,
 }: {
-  orderId: string;
-  title: string;
-  description: string;
-  onSuccess: () => void;
-  onCancel: () => void;
+  orderId: string; title: string; description: string;
+  onSuccess: () => void; onCancel: () => void;
 }) {
   const uploadBukti = useUploadBukti();
   const { toast } = useToast();
@@ -61,7 +71,6 @@ function UploadFileDialog({
     setUploading(true);
     try {
       const base64 = await fileToBase64(file);
-      // Tipe "hasil" — GAS akan atur status otomatis berdasarkan status saat ini
       await uploadBukti.mutateAsync({ orderId, tipe: "hasil", fileBase64: base64, fileName: file.name });
       toast({ title: "File berhasil diupload!" });
       onSuccess();
@@ -107,16 +116,151 @@ function UploadFileDialog({
   );
 }
 
+// ─── Admin Action Column ───────────────────────────────────────
+// Setiap status memiliki satu aksi yang jelas sesuai alur.
+// Status "menunggu customer" hanya menampilkan label, tanpa tombol.
+function AdminActionCell({
+  order,
+  onAction,
+  onOpenUpload,
+  loading,
+}: {
+  order: Order;
+  onAction: (orderId: string, status: OrderStatus) => void;
+  onOpenUpload: (orderId: string, type: "hasil_pertama" | "hasil_revisi") => void;
+  loading: boolean;
+}) {
+  const { status, order_id, bukti_dp_url, bukti_pelunasan_url } = order;
+
+  if (status === "verifikasi tugas") {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-slate-500">Periksa detail pesanan, lalu verifikasi.</p>
+        <Button size="sm" className="w-full" disabled={loading}
+          onClick={() => onAction(order_id, "pembayaran awal")}>
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle className="w-4 h-4 mr-1" /> Verifikasi & Minta DP</>}
+        </Button>
+      </div>
+    );
+  }
+
+  if (status === "pembayaran awal") {
+    return (
+      <div className="flex items-center gap-2 text-amber-600">
+        <Clock className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs">Menunggu customer upload bukti DP</span>
+      </div>
+    );
+  }
+
+  if (status === "verifikasi pembayaran awal") {
+    return (
+      <div className="space-y-2">
+        {bukti_dp_url && (
+          <a href={bukti_dp_url} target="_blank" rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+            <ExternalLink className="w-3 h-3" /> Lihat Bukti DP
+          </a>
+        )}
+        <p className="text-xs text-slate-500">Cek bukti DP, lalu konfirmasi.</p>
+        <Button size="sm" className="w-full" disabled={loading}
+          onClick={() => onAction(order_id, "proses pengerjaan")}>
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle className="w-4 h-4 mr-1" /> DP OK, Mulai Kerjakan</>}
+        </Button>
+      </div>
+    );
+  }
+
+  if (status === "proses pengerjaan") {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-slate-500">Setelah tugas selesai, upload file hasil.</p>
+        <Button size="sm" className="w-full" disabled={loading}
+          onClick={() => onOpenUpload(order_id, "hasil_pertama")}>
+          <Upload className="w-4 h-4 mr-1" /> Upload Hasil & Minta Pelunasan
+        </Button>
+      </div>
+    );
+  }
+
+  if (status === "menunggu pelunasan") {
+    return (
+      <div className="flex items-center gap-2 text-cyan-600">
+        <Clock className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs">Menunggu customer upload bukti pelunasan</span>
+      </div>
+    );
+  }
+
+  if (status === "menunggu verifikasi") {
+    return (
+      <div className="space-y-2">
+        {bukti_pelunasan_url && (
+          <a href={bukti_pelunasan_url} target="_blank" rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+            <ExternalLink className="w-3 h-3" /> Lihat Bukti Pelunasan
+          </a>
+        )}
+        <p className="text-xs text-slate-500">Cek bukti pelunasan, lalu aktifkan file.</p>
+        <Button size="sm" className="w-full" disabled={loading}
+          onClick={() => onAction(order_id, "cek file")}>
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle className="w-4 h-4 mr-1" /> Pelunasan OK, Aktifkan File</>}
+        </Button>
+      </div>
+    );
+  }
+
+  if (status === "cek file") {
+    return (
+      <div className="flex items-center gap-2 text-indigo-600">
+        <Clock className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs">Menunggu customer cek file & konfirmasi</span>
+      </div>
+    );
+  }
+
+  if (status === "revisi") {
+    return (
+      <div className="space-y-2">
+        {order.revisi_catatan && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-xs text-yellow-800">
+            <span className="font-medium">Catatan revisi:</span>{" "}
+            {String(order.revisi_catatan).slice(0, 80)}{String(order.revisi_catatan).length > 80 ? "…" : ""}
+          </div>
+        )}
+        {order.revisi_file_urls && String(order.revisi_file_urls).trim() &&
+          String(order.revisi_file_urls).split(",").filter(Boolean).map((url, i) => (
+            <a key={i} href={url.trim()} target="_blank" rel="noopener noreferrer"
+              className="text-xs text-yellow-600 hover:underline flex items-center gap-1">
+              <ExternalLink className="w-3 h-3" /> File Referensi {i + 1}
+            </a>
+          ))
+        }
+        <p className="text-xs text-slate-500">Upload hasil revisi → status langsung Selesai.</p>
+        <Button size="sm" className="w-full bg-yellow-600 hover:bg-yellow-700 text-white" disabled={loading}
+          onClick={() => onOpenUpload(order_id, "hasil_revisi")}>
+          <Upload className="w-4 h-4 mr-1" /> Upload Hasil Revisi
+        </Button>
+      </div>
+    );
+  }
+
+  if (status === "selesai") {
+    return (
+      <div className="flex items-center gap-2 text-green-600">
+        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs font-medium">Order selesai</span>
+      </div>
+    );
+  }
+
+  return <span className="text-xs text-slate-400">{status}</span>;
+}
+
 // ─── Login ─────────────────────────────────────────────────────
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === "admin123") setIsAuthenticated(true);
-    else alert("Password salah");
-  };
 
   if (!isAuthenticated) {
     return (
@@ -130,7 +274,11 @@ export default function AdminPage() {
               <CardTitle>Admin Login</CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form onSubmit={e => {
+                e.preventDefault();
+                if (password === "admin123") setIsAuthenticated(true);
+                else alert("Password salah");
+              }} className="space-y-4">
                 <Input type="password" placeholder="Masukkan password..." value={password}
                   onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
                 <Button type="submit" className="w-full">Masuk</Button>
@@ -150,57 +298,45 @@ function AdminDashboard() {
   const { toast } = useToast();
   const { data: orders = [], isLoading, refetch, isFetching } = useGetAllOrders();
   const updateOrder = useUpdateOrder();
-
-  // Dialog: { orderId, type: "hasil_pertama" | "hasil_revisi" }
+  const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
   const [uploadDialog, setUploadDialog] = useState<{
-    orderId: string;
-    type: "hasil_pertama" | "hasil_revisi";
+    orderId: string; type: "hasil_pertama" | "hasil_revisi";
   } | null>(null);
 
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
-    // "Menunggu Pelunasan" → wajib upload file hasil tugas dulu
-    if (newStatus === "menunggu pelunasan") {
-      setUploadDialog({ orderId, type: "hasil_pertama" });
-      return;
-    }
-    // "Selesai" dari status "revisi" → wajib upload hasil revisi dulu
-    if (newStatus === "selesai") {
-      const order = orders.find(o => o.order_id === orderId);
-      if (order?.status === "revisi") {
-        setUploadDialog({ orderId, type: "hasil_revisi" });
-        return;
-      }
-    }
+  async function handleAction(orderId: string, status: OrderStatus) {
+    setLoadingOrderId(orderId);
     try {
-      await updateOrder.mutateAsync({ orderId, status: newStatus as OrderStatus });
-      toast({ title: "Status diperbarui", description: `${orderId} → ${newStatus}` });
+      await updateOrder.mutateAsync({ orderId, status });
+      toast({ title: "Status diperbarui", description: `→ ${STATUS_LABEL[status] || status}` });
       refetch();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Gagal update", description: error.message });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Gagal", description: err.message });
+    } finally {
+      setLoadingOrderId(null);
     }
-  };
+  }
 
   const count = (s: string) => orders.filter(o => o.status === s).length;
   const needsAction = orders.filter(o =>
-    ["verifikasi tugas", "verifikasi pembayaran awal", "menunggu verifikasi", "revisi"].includes(o.status)
+    ["verifikasi tugas", "verifikasi pembayaran awal", "proses pengerjaan", "menunggu verifikasi", "revisi"].includes(o.status)
   ).length;
 
   return (
     <Layout>
       {uploadDialog?.type === "hasil_pertama" && (
-        <UploadFileDialog
+        <UploadDialog
           orderId={uploadDialog.orderId}
           title="Upload File Hasil Tugas"
-          description="Upload file hasil tugas terlebih dahulu. Status akan otomatis berubah ke Menunggu Pelunasan."
+          description="Upload file hasil tugas. Status otomatis berubah ke Menunggu Pelunasan setelah upload berhasil."
           onSuccess={() => { setUploadDialog(null); refetch(); }}
           onCancel={() => setUploadDialog(null)}
         />
       )}
       {uploadDialog?.type === "hasil_revisi" && (
-        <UploadFileDialog
+        <UploadDialog
           orderId={uploadDialog.orderId}
           title="Upload Hasil Revisi"
-          description="Upload file hasil revisi. Status akan langsung berubah ke Selesai — customer dapat mengunduh hasilnya."
+          description="Upload file hasil revisi. Status langsung berubah ke Selesai — customer bisa unduh hasil akhir."
           onSuccess={() => { setUploadDialog(null); refetch(); }}
           onCancel={() => setUploadDialog(null)}
         />
@@ -208,13 +344,17 @@ function AdminDashboard() {
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
+            <p className="text-sm text-slate-500 mt-1">Ikuti alur tombol di setiap baris — tidak bisa loncat langkah.</p>
+          </div>
           <Button onClick={() => refetch()} variant="outline" disabled={isFetching} className="w-full sm:w-auto">
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
-            Refresh Data
+            Refresh
           </Button>
         </div>
 
+        {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Card className="bg-slate-50 border-slate-200">
             <CardContent className="p-4">
@@ -242,6 +382,26 @@ function AdminDashboard() {
           </Card>
         </div>
 
+        {/* Alur referensi */}
+        <Card className="bg-slate-50 border-slate-200">
+          <CardContent className="p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Alur Status</p>
+            <div className="flex flex-wrap items-center gap-1 text-xs text-slate-600">
+              {[
+                "Verifikasi Tugas", "Pembayaran Awal", "Verifikasi Pembayaran Awal",
+                "Proses Pengerjaan", "Menunggu Pelunasan", "Menunggu Verifikasi",
+                "Cek File", "Revisi", "Selesai",
+              ].map((s, i, arr) => (
+                <React.Fragment key={s}>
+                  <span className="bg-white border border-slate-200 rounded px-2 py-0.5">{s}</span>
+                  {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-400 flex-shrink-0" />}
+                </React.Fragment>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tabel */}
         <Card>
           <CardHeader><CardTitle>Daftar Pesanan</CardTitle></CardHeader>
           <CardContent className="p-0">
@@ -256,18 +416,29 @@ function AdminDashboard() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Order ID</TableHead>
+                      <TableHead className="w-[140px]">Order ID</TableHead>
                       <TableHead>Nama & WA</TableHead>
                       <TableHead>Tugas</TableHead>
                       <TableHead>Harga</TableHead>
                       <TableHead>File</TableHead>
-                      <TableHead>Status & Aksi</TableHead>
+                      <TableHead className="w-[220px]">Status & Aksi Admin</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {orders.map((order) => (
-                      <TableRow key={order.order_id}>
-                        <TableCell className="font-mono text-xs whitespace-nowrap">{order.order_id}</TableCell>
+                      <TableRow key={order.order_id} className={
+                        ["verifikasi tugas", "verifikasi pembayaran awal", "proses pengerjaan", "menunggu verifikasi", "revisi"].includes(order.status)
+                          ? "bg-orange-50/30"
+                          : ""
+                      }>
+                        <TableCell>
+                          <div className="font-mono text-xs text-slate-700 break-all">{order.order_id}</div>
+                          {order.created_at && (
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              {new Date(order.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "2-digit" })}
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <div className="font-medium text-sm">{order.nama}</div>
                           <div className="text-xs text-slate-500">{order.wa}</div>
@@ -285,68 +456,29 @@ function AdminDashboard() {
                           <div className="text-xs text-slate-500">Sisa: {order.sisa_bayar ? formatRupiah(Number(order.sisa_bayar)) : "-"}</div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1 min-w-[110px]">
-                            {order.bukti_dp_url && (
-                              <a href={order.bukti_dp_url} target="_blank" rel="noopener noreferrer"
-                                className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                                <ExternalLink className="w-3 h-3" /> Bukti DP
-                              </a>
-                            )}
-                            {order.bukti_pelunasan_url && (
-                              <a href={order.bukti_pelunasan_url} target="_blank" rel="noopener noreferrer"
-                                className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                                <ExternalLink className="w-3 h-3" /> Bukti Lunas
-                              </a>
-                            )}
+                          <div className="flex flex-col gap-1 min-w-[90px]">
                             {order.hasil_url && (
                               <a href={order.hasil_url} target="_blank" rel="noopener noreferrer"
                                 className="text-xs text-green-600 hover:underline flex items-center gap-1">
                                 <ExternalLink className="w-3 h-3" /> Hasil
                               </a>
                             )}
-                            {order.revisi_catatan && (
-                              <div className="text-xs text-yellow-700 p-1 bg-yellow-50 rounded mt-1">
-                                <span className="font-medium">Revisi:</span>{" "}
-                                {String(order.revisi_catatan).slice(0, 50)}{String(order.revisi_catatan).length > 50 ? "…" : ""}
-                              </div>
-                            )}
-                            {order.revisi_file_urls && String(order.revisi_file_urls).trim() &&
-                              String(order.revisi_file_urls).split(",").filter(Boolean).map((url, i) => (
-                                <a key={i} href={url.trim()} target="_blank" rel="noopener noreferrer"
-                                  className="text-xs text-yellow-600 hover:underline flex items-center gap-1">
-                                  <ExternalLink className="w-3 h-3" /> File Revisi {i + 1}
-                                </a>
-                              ))
-                            }
-                            {!order.bukti_dp_url && !order.hasil_url && !order.revisi_catatan && (
+                            {!order.bukti_dp_url && !order.hasil_url && (
                               <span className="text-xs text-slate-400">-</span>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-2 min-w-[175px]">
-                            <Badge variant="outline" className={`text-xs block text-center ${statusCls(order.status)}`}>
-                              {order.status}
+                          <div className="space-y-2">
+                            <Badge variant="outline" className={`text-xs w-full text-center justify-center ${statusCls(order.status)}`}>
+                              {STATUS_LABEL[order.status] || order.status}
                             </Badge>
-                            <Select value={order.status} onValueChange={val => handleStatusChange(order.order_id, val)}>
-                              <SelectTrigger className="w-full h-7 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="verifikasi tugas">Verifikasi Tugas</SelectItem>
-                                <SelectItem value="pembayaran awal">Pembayaran Awal</SelectItem>
-                                <SelectItem value="verifikasi pembayaran awal">Verifikasi Pembayaran Awal</SelectItem>
-                                <SelectItem value="proses pengerjaan">Proses Pengerjaan</SelectItem>
-                                <SelectItem value="menunggu pelunasan">⚠️ Menunggu Pelunasan</SelectItem>
-                                <SelectItem value="menunggu verifikasi">Menunggu Verifikasi</SelectItem>
-                                <SelectItem value="cek file">Cek File</SelectItem>
-                                <SelectItem value="revisi">Revisi</SelectItem>
-                                <SelectItem value="selesai">⚠️ Selesai</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <p className="text-xs text-slate-400 leading-tight">
-                              ⚠️ Menunggu Pelunasan & Selesai (dari revisi) = wajib upload file
-                            </p>
+                            <AdminActionCell
+                              order={order}
+                              onAction={handleAction}
+                              onOpenUpload={(orderId, type) => setUploadDialog({ orderId, type })}
+                              loading={loadingOrderId === order.order_id}
+                            />
                           </div>
                         </TableCell>
                       </TableRow>
