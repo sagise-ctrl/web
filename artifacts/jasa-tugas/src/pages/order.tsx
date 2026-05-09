@@ -376,7 +376,7 @@ export default function OrderPage() {
 
   // ─── Step 2: Detail Tugas ─────────────────────────────────────
   if (step === 2) {
-    const opts = watchedJenis ? halamanOptions(watchedJenis) : [];
+    const opts = selectedJenis ? halamanOptions(selectedJenis) : [];
 
     return (
       <Layout>
@@ -471,7 +471,7 @@ export default function OrderPage() {
                     </FormItem>
                   )} />
 
-                  {watchedJenis && (
+                  {selectedJenis && (
                     <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex justify-between items-center">
                       <span className="text-sm font-medium text-slate-700">Estimasi Harga</span>
                       <span className="text-lg font-bold text-primary">{formatRupiah(hargaPreview)}</span>
