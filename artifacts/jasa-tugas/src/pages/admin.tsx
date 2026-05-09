@@ -801,6 +801,16 @@ function AdminDashboard() {
                                   </span>
                                 </button>
                               )}
+                            {order.file_tugas_url && String(order.file_tugas_url).trim() && (
+                              <a
+                                href={String(order.file_tugas_url).trim()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                              >
+                                <ExternalLink className="w-3 h-3" /> File Pendukung
+                              </a>
+                            )}
                             {order.hasil_url && (
                               <a
                                 href={order.hasil_url}
@@ -813,6 +823,7 @@ function AdminDashboard() {
                             )}
                             {!order.note &&
                               !order.revisi_catatan &&
+                              !order.file_tugas_url &&
                               !order.hasil_url && (
                                 <span className="text-xs text-slate-400">
                                   -

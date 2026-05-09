@@ -9,12 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Search, Loader2, FileText, BookOpen, User,
   CreditCard, Upload, CheckCircle, AlertCircle, Download, X,
+  MessageCircle, Paperclip, CalendarClock, ExternalLink,
 } from "lucide-react";
 import {
   useGetOrder, useUploadBukti, useSubmitRevisi, useMarkSelesai,
   type OrderStatus, formatRupiah, formatEstimasi,
 } from "@/hooks/use-orders";
-import { CalendarClock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Status badge ──────────────────────────────────────────────
@@ -134,6 +134,9 @@ export default function TrackPage() {
   const [submittingRevisi, setSubmittingRevisi] = useState(false);
   const [markingSelesai, setMarkingSelesai] = useState(false);
 
+  const [fileTugasFile, setFileTugasFile] = useState<File | null>(null);
+  const [uploadingFileTugas, setUploadingFileTugas] = useState(false);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("id");
@@ -221,6 +224,28 @@ export default function TrackPage() {
     }
   }
 
+  // Upload file pendukung tugas
+  async function onUploadFileTugas() {
+    if (!fileTugasFile || !order) return;
+    setUploadingFileTugas(true);
+    try {
+      const base64 = await fileToBase64(fileTugasFile);
+      await uploadBukti.mutateAsync({
+        orderId: order.order_id,
+        tipe: "file_tugas",
+        fileBase64: base64,
+        fileName: fileTugasFile.name,
+      });
+      toast({ title: "File berhasil diupload!", description: "Admin dapat melihat dan mengunduh file pendukung Anda." });
+      setFileTugasFile(null);
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Gagal Upload", description: err.message });
+    } finally {
+      setUploadingFileTugas(false);
+    }
+  }
+
   const harga = order?.harga ? Number(order.harga) : 0;
   const dp = order?.dp ? Number(order.dp) : 10000;
   const sisa = order?.sisa_bayar ? Number(order.sisa_bayar) : Math.max(0, harga - dp);
@@ -300,6 +325,88 @@ export default function TrackPage() {
                 </dl>
               </CardContent>
             </Card>
+
+            {/* ── Upload File Pendukung (opsional, semua status aktif) ── */}
+            {order.status !== "selesai" && (
+              <Card className="border-slate-200 shadow-sm">
+                <CardContent className="p-5 space-y-3">
+                  <div className="flex items-center gap-2 text-slate-700 font-semibold">
+                    <Paperclip className="w-5 h-5" />
+                    <span>File Pendukung Tugas</span>
+                    <span className="text-xs font-normal text-slate-400 ml-1">(opsional)</span>
+                  </div>
+
+                  {order.file_tugas_url && String(order.file_tugas_url).trim() ? (
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        <span className="text-sm text-slate-600 truncate">File sudah diupload</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <a
+                          href={String(order.file_tugas_url).trim()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3 h-3" /> Lihat
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">Belum ada file pendukung. Anda bisa upload soal, instruksi, atau referensi untuk membantu admin mengerjakan tugas.</p>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center cursor-pointer hover:border-primary transition-colors flex flex-col items-center gap-1">
+                      {fileTugasFile ? (
+                        <div className="flex items-center gap-2 text-green-700">
+                          <CheckCircle className="w-5 h-5" />
+                          <span className="text-sm font-medium">{fileTugasFile.name}</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-6 h-6 text-slate-400" />
+                          <p className="text-sm text-slate-500">
+                            {order.file_tugas_url ? "Klik untuk ganti file" : "Klik untuk pilih file"}
+                          </p>
+                          <p className="text-xs text-slate-400">JPG, PDF, DOC, atau DOCX</p>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.pdf,.doc,.docx"
+                        className="hidden"
+                        onChange={e => setFileTugasFile(e.target.files?.[0] || null)}
+                      />
+                    </label>
+
+                    {fileTugasFile && (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setFileTugasFile(null)}
+                        >
+                          Batal
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          disabled={uploadingFileTugas}
+                          onClick={onUploadFileTugas}
+                        >
+                          {uploadingFileTugas
+                            ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Mengupload...</>
+                            : <><Upload className="w-4 h-4 mr-1" />Upload File</>}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* ── Menunggu Verifikasi Admin ── */}
             {order.status === "verifikasi tugas" && (
@@ -563,6 +670,21 @@ export default function TrackPage() {
                       </Button>
                     </a>
                   )}
+                  <a
+                    href={`https://wa.me/6285875630641?text=${encodeURIComponent(
+                      `Halo kak, saya ${order.nama}, mau tanya tugas dengan nomor order ${order.order_id}. [Tulis pertanyaanmu di sini]`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button
+                      variant="outline"
+                      className="w-full border-green-400 text-green-800 hover:bg-green-100 gap-2"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Hubungi CS via WhatsApp
+                    </Button>
+                  </a>
                 </CardContent>
               </Card>
             )}

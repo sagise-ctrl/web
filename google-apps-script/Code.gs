@@ -322,7 +322,17 @@ function getOrCreateFolder(parent, name) {
 
 function getMimeType(fileName) {
   const ext = fileName.split(".").pop().toLowerCase();
-  return { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", pdf: "application/pdf" }[ext] || "application/octet-stream";
+  const types = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    pdf: "application/pdf",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  };
+  return types[ext] || "application/octet-stream";
 }
 
 function jsonResponse(data) {
