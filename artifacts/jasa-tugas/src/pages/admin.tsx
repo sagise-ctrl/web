@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   LockKeyhole, RefreshCw, Loader2, ExternalLink, Upload,
-  CheckCircle, X, ChevronRight, Clock,
+  CheckCircle, X, ChevronRight, Clock, FileText, CalendarClock,
 } from "lucide-react";
 import {
   useGetAllOrders, useUpdateOrder, useUploadBukti,
   type Order, type OrderStatus, formatRupiah,
+  hitungEstimasiSelesai, formatEstimasi,
 } from "@/hooks/use-orders";
 import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -52,6 +53,18 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function downloadTxt(filename: string, content: string) {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ─── Upload Dialog ─────────────────────────────────────────────
@@ -117,8 +130,6 @@ function UploadDialog({
 }
 
 // ─── Admin Action Column ───────────────────────────────────────
-// Setiap status memiliki satu aksi yang jelas sesuai alur.
-// Status "menunggu customer" hanya menampilkan label, tanpa tombol.
 function AdminActionCell({
   order,
   onAction,
@@ -126,7 +137,7 @@ function AdminActionCell({
   loading,
 }: {
   order: Order;
-  onAction: (orderId: string, status: OrderStatus) => void;
+  onAction: (orderId: string, status: OrderStatus, estimasiSelesai?: string) => void;
   onOpenUpload: (orderId: string, type: "hasil_pertama" | "hasil_revisi") => void;
   loading: boolean;
 }) {
@@ -164,7 +175,10 @@ function AdminActionCell({
         )}
         <p className="text-xs text-slate-500">Cek bukti DP, lalu konfirmasi.</p>
         <Button size="sm" className="w-full" disabled={loading}
-          onClick={() => onAction(order_id, "proses pengerjaan")}>
+          onClick={() => {
+            const estimasi = hitungEstimasiSelesai(order.tipe_order, new Date());
+            onAction(order_id, "proses pengerjaan", estimasi.toISOString());
+          }}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle className="w-4 h-4 mr-1" /> DP OK, Mulai Kerjakan</>}
         </Button>
       </div>
@@ -174,6 +188,15 @@ function AdminActionCell({
   if (status === "proses pengerjaan") {
     return (
       <div className="space-y-2">
+        {order.estimasi_selesai && (
+          <div className="flex items-start gap-1.5 bg-blue-50 border border-blue-200 rounded p-2">
+            <CalendarClock className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">Estimasi Selesai</p>
+              <p className="text-xs text-blue-800">{formatEstimasi(order.estimasi_selesai)}</p>
+            </div>
+          </div>
+        )}
         <p className="text-xs text-slate-500">Setelah tugas selesai, upload file hasil.</p>
         <Button size="sm" className="w-full" disabled={loading}
           onClick={() => onOpenUpload(order_id, "hasil_pertama")}>
@@ -185,9 +208,20 @@ function AdminActionCell({
 
   if (status === "menunggu pelunasan") {
     return (
-      <div className="flex items-center gap-2 text-cyan-600">
-        <Clock className="w-4 h-4 flex-shrink-0" />
-        <span className="text-xs">Menunggu customer upload bukti pelunasan</span>
+      <div className="space-y-2">
+        {order.estimasi_selesai && (
+          <div className="flex items-start gap-1.5 bg-blue-50 border border-blue-200 rounded p-2">
+            <CalendarClock className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">Estimasi Selesai</p>
+              <p className="text-xs text-blue-800">{formatEstimasi(order.estimasi_selesai)}</p>
+            </div>
+          </div>
+        )}
+        <div className="flex items-center gap-2 text-cyan-600">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="text-xs">Menunggu customer upload bukti pelunasan</span>
+        </div>
       </div>
     );
   }
@@ -222,10 +256,13 @@ function AdminActionCell({
   if (status === "revisi") {
     return (
       <div className="space-y-2">
-        {order.revisi_catatan && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-xs text-yellow-800">
-            <span className="font-medium">Catatan revisi:</span>{" "}
-            {String(order.revisi_catatan).slice(0, 80)}{String(order.revisi_catatan).length > 80 ? "…" : ""}
+        {order.estimasi_revisi && (
+          <div className="flex items-start gap-1.5 bg-yellow-50 border border-yellow-200 rounded p-2">
+            <CalendarClock className="w-3.5 h-3.5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] font-semibold text-yellow-700 uppercase tracking-wide">Estimasi Revisi Selesai</p>
+              <p className="text-xs text-yellow-800">{formatEstimasi(order.estimasi_revisi)}</p>
+            </div>
           </div>
         )}
         {order.revisi_file_urls && String(order.revisi_file_urls).trim() &&
@@ -303,10 +340,10 @@ function AdminDashboard() {
     orderId: string; type: "hasil_pertama" | "hasil_revisi";
   } | null>(null);
 
-  async function handleAction(orderId: string, status: OrderStatus) {
+  async function handleAction(orderId: string, status: OrderStatus, estimasiSelesai?: string) {
     setLoadingOrderId(orderId);
     try {
-      await updateOrder.mutateAsync({ orderId, status });
+      await updateOrder.mutateAsync({ orderId, status, estimasi_selesai: estimasiSelesai });
       toast({ title: "Status diperbarui", description: `→ ${STATUS_LABEL[status] || status}` });
       refetch();
     } catch (err: any) {
@@ -420,8 +457,8 @@ function AdminDashboard() {
                       <TableHead>Nama & WA</TableHead>
                       <TableHead>Tugas</TableHead>
                       <TableHead>Harga</TableHead>
-                      <TableHead>File</TableHead>
-                      <TableHead className="w-[220px]">Status & Aksi Admin</TableHead>
+                      <TableHead>Catatan & File</TableHead>
+                      <TableHead className="w-[240px]">Status & Aksi Admin</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -456,14 +493,32 @@ function AdminDashboard() {
                           <div className="text-xs text-slate-500">Sisa: {order.sisa_bayar ? formatRupiah(Number(order.sisa_bayar)) : "-"}</div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1 min-w-[90px]">
+                          <div className="flex flex-col gap-1.5 min-w-[110px]">
+                            {order.note && String(order.note).trim() && (
+                              <button
+                                onClick={() => downloadTxt(`catatan-order-${order.order_id}.txt`, String(order.note))}
+                                className="flex items-center gap-1 text-xs text-slate-600 hover:text-primary transition-colors text-left"
+                              >
+                                <FileText className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
+                                <span className="underline underline-offset-2">Catatan Order.txt</span>
+                              </button>
+                            )}
+                            {order.revisi_catatan && String(order.revisi_catatan).trim() && (
+                              <button
+                                onClick={() => downloadTxt(`catatan-revisi-${order.order_id}.txt`, String(order.revisi_catatan))}
+                                className="flex items-center gap-1 text-xs text-yellow-700 hover:text-yellow-900 transition-colors text-left"
+                              >
+                                <FileText className="w-3.5 h-3.5 flex-shrink-0 text-yellow-500" />
+                                <span className="underline underline-offset-2">Catatan Revisi.txt</span>
+                              </button>
+                            )}
                             {order.hasil_url && (
                               <a href={order.hasil_url} target="_blank" rel="noopener noreferrer"
                                 className="text-xs text-green-600 hover:underline flex items-center gap-1">
                                 <ExternalLink className="w-3 h-3" /> Hasil
                               </a>
                             )}
-                            {!order.bukti_dp_url && !order.hasil_url && (
+                            {!order.note && !order.revisi_catatan && !order.hasil_url && (
                               <span className="text-xs text-slate-400">-</span>
                             )}
                           </div>

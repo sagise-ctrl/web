@@ -12,8 +12,9 @@ import {
 } from "lucide-react";
 import {
   useGetOrder, useUploadBukti, useSubmitRevisi, useMarkSelesai,
-  type OrderStatus, formatRupiah,
+  type OrderStatus, formatRupiah, formatEstimasi,
 } from "@/hooks/use-orders";
+import { CalendarClock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Status badge ──────────────────────────────────────────────
@@ -350,13 +351,24 @@ export default function TrackPage() {
 
             {/* ── Proses Pengerjaan ── */}
             {order.status === "proses pengerjaan" && (
-              <Alert className="bg-blue-50 border-blue-200">
-                <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                <AlertTitle className="text-blue-800">Tugas Sedang Dikerjakan</AlertTitle>
-                <AlertDescription className="text-blue-700">
-                  DP Anda sudah terverifikasi. Tugas sedang dalam proses pengerjaan, kami akan menghubungi Anda jika ada pertanyaan.
-                </AlertDescription>
-              </Alert>
+              <div className="space-y-3">
+                <Alert className="bg-blue-50 border-blue-200">
+                  <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                  <AlertTitle className="text-blue-800">Tugas Sedang Dikerjakan</AlertTitle>
+                  <AlertDescription className="text-blue-700">
+                    DP Anda sudah terverifikasi. Tugas sedang dalam proses pengerjaan, kami akan menghubungi Anda jika ada pertanyaan.
+                  </AlertDescription>
+                </Alert>
+                {order.estimasi_selesai && (
+                  <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <CalendarClock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-800">Estimasi Maksimal Selesai</p>
+                      <p className="text-sm text-blue-700 mt-0.5">{formatEstimasi(order.estimasi_selesai)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* ── Menunggu Pelunasan ── */}
@@ -445,15 +457,15 @@ export default function TrackPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Catatan Revisi (maks 500 karakter)</label>
+                        <label className="text-sm font-medium text-slate-700">Catatan Revisi (maks 1000 karakter)</label>
                         <Textarea
                           placeholder="Jelaskan bagian yang perlu direvisi..."
                           className="min-h-[100px] resize-none"
-                          maxLength={500}
+                          maxLength={1000}
                           value={revisiCatatan}
                           onChange={e => setRevisiCatatan(e.target.value)}
                         />
-                        <p className="text-xs text-right text-slate-400">{revisiCatatan.length}/500</p>
+                        <p className="text-xs text-right text-slate-400">{revisiCatatan.length}/1000</p>
                       </div>
 
                       <div className="space-y-2">
@@ -496,13 +508,24 @@ export default function TrackPage() {
 
             {/* ── Revisi sedang dikerjakan ── */}
             {order.status === "revisi" && (
-              <Alert className="bg-yellow-50 border-yellow-200">
-                <AlertCircle className="h-4 w-4 text-yellow-600" />
-                <AlertTitle className="text-yellow-800">Revisi Sedang Dikerjakan</AlertTitle>
-                <AlertDescription className="text-yellow-700">
-                  Permintaan revisi Anda sedang diproses. File yang diperbarui akan muncul di halaman ini setelah selesai.
-                </AlertDescription>
-              </Alert>
+              <div className="space-y-3">
+                <Alert className="bg-yellow-50 border-yellow-200">
+                  <AlertCircle className="h-4 w-4 text-yellow-600" />
+                  <AlertTitle className="text-yellow-800">Revisi Sedang Dikerjakan</AlertTitle>
+                  <AlertDescription className="text-yellow-700">
+                    Permintaan revisi Anda sedang diproses. File yang diperbarui akan muncul di halaman ini setelah selesai.
+                  </AlertDescription>
+                </Alert>
+                {order.estimasi_revisi && (
+                  <div className="flex items-start gap-3 bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                    <CalendarClock className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-yellow-800">Estimasi Revisi Selesai</p>
+                      <p className="text-sm text-yellow-700 mt-0.5">{formatEstimasi(order.estimasi_revisi)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* ── Selesai ── */}

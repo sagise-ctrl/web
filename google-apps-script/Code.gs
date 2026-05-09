@@ -1,5 +1,5 @@
 // ============================================================
-// JASA TUGAS - Google Apps Script Backend (v5)
+// JASA TUGAS - Google Apps Script Backend (v6)
 // ============================================================
 // ALUR STATUS:
 // verifikasi tugas → pembayaran awal → verifikasi pembayaran awal
@@ -37,7 +37,9 @@ const COLUMNS = {
   CREATED_AT: 17,
   REVISI_CATATAN: 18,
   REVISI_FILE_URLS: 19,
-  REVISI_COUNT: 20
+  REVISI_COUNT: 20,
+  ESTIMASI_SELESAI: 21,
+  ESTIMASI_REVISI: 22
 };
 
 const VALID_STATUSES = [
@@ -67,9 +69,10 @@ function getSheet() {
       "harga", "dp", "sisa_bayar",
       "file_tugas_url", "bukti_dp_url", "bukti_pelunasan_url",
       "hasil_url", "created_at",
-      "revisi_catatan", "revisi_file_urls", "revisi_count"
+      "revisi_catatan", "revisi_file_urls", "revisi_count",
+      "estimasi_selesai", "estimasi_revisi"
     ]);
-    sheet.getRange(1, 1, 1, 20).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 22).setFontWeight("bold");
   }
   return sheet;
 }
@@ -99,7 +102,9 @@ function rowToObject(row) {
     created_at: row[16],
     revisi_catatan: row[17],
     revisi_file_urls: row[18],
-    revisi_count: row[19] || 0
+    revisi_count: row[19] || 0,
+    estimasi_selesai: row[20] || "",
+    estimasi_revisi: row[21] || ""
   };
 }
 
@@ -121,9 +126,9 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     if (body.action === "createOrder") return handleCreateOrder(body.data);
-    if (body.action === "updateStatus") return handleUpdateStatus(body.order_id, body.status);
+    if (body.action === "updateStatus") return handleUpdateStatus(body.order_id, body.status, body.estimasi_selesai);
     if (body.action === "uploadFile") return handleUploadFile(body.order_id, body.tipe, body.fileBase64, body.fileName);
-    if (body.action === "submitRevisi") return handleSubmitRevisi(body.order_id, body.catatan, body.files);
+    if (body.action === "submitRevisi") return handleSubmitRevisi(body.order_id, body.catatan, body.files, body.estimasi_revisi);
     if (body.action === "markSelesai") return handleMarkSelesai(body.order_id);
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
@@ -158,7 +163,7 @@ function handleCreateOrder(data) {
     order_id, data.nama, data.wa, data.jenis, Number(data.halaman),
     data.deadline || "", data.note || "", "verifikasi tugas",
     data.tipe_order || "standar", harga, dp, Math.max(0, harga - dp),
-    "", "", "", "", new Date().toISOString(), "", "", 0
+    "", "", "", "", new Date().toISOString(), "", "", 0, "", ""
   ]);
   return jsonResponse({ success: true, order_id });
 }
@@ -185,7 +190,7 @@ function handleGetAllOrders() {
   return jsonResponse({ success: true, data: orders });
 }
 
-function handleUpdateStatus(order_id, status) {
+function handleUpdateStatus(order_id, status, estimasi_selesai) {
   if (!order_id || !status) return jsonResponse({ success: false, message: "Parameter kurang" });
   if (!VALID_STATUSES.includes(status)) return jsonResponse({ success: false, message: "Status tidak valid: " + status });
   const sheet = getSheet();
@@ -193,6 +198,9 @@ function handleUpdateStatus(order_id, status) {
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === order_id) {
       sheet.getRange(i + 1, COLUMNS.STATUS).setValue(status);
+      if (status === "proses pengerjaan" && estimasi_selesai) {
+        sheet.getRange(i + 1, COLUMNS.ESTIMASI_SELESAI).setValue(estimasi_selesai);
+      }
       return jsonResponse({ success: true });
     }
   }
@@ -258,7 +266,7 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
 }
 
 // ─── Submit revisi (customer) ─────────────────────────────────
-function handleSubmitRevisi(order_id, catatan, files) {
+function handleSubmitRevisi(order_id, catatan, files, estimasi_revisi) {
   if (!order_id) return jsonResponse({ success: false, message: "order_id diperlukan" });
   const sheet = getSheet();
   const data = sheet.getDataRange().getValues();
@@ -284,6 +292,9 @@ function handleSubmitRevisi(order_id, catatan, files) {
       sheet.getRange(i + 1, COLUMNS.REVISI_FILE_URLS).setValue(uploadedUrls.join(","));
       sheet.getRange(i + 1, COLUMNS.REVISI_COUNT).setValue(revisiCount + 1);
       sheet.getRange(i + 1, COLUMNS.STATUS).setValue("revisi");
+      if (estimasi_revisi) {
+        sheet.getRange(i + 1, COLUMNS.ESTIMASI_REVISI).setValue(estimasi_revisi);
+      }
       return jsonResponse({ success: true });
     }
   }

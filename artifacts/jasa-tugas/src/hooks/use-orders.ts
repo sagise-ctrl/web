@@ -37,6 +37,8 @@ export interface Order {
   revisi_catatan?: string;
   revisi_file_urls?: string;
   revisi_count?: number;
+  estimasi_selesai?: string;
+  estimasi_revisi?: string;
 }
 
 export interface WaCheckResult {
@@ -45,6 +47,31 @@ export interface WaCheckResult {
 }
 
 const GAS_URL = import.meta.env.VITE_GAS_URL;
+
+// ─── Estimasi helpers ─────────────────────────────────────────
+
+export function hitungEstimasiSelesai(tipeOrder: TipeOrder | string | undefined, fromDate: Date = new Date()): Date {
+  const days = tipeOrder === "super ekspres" ? 1 : tipeOrder === "ekspres" ? 2 : 4;
+  const estimasi = new Date(fromDate);
+  estimasi.setDate(estimasi.getDate() + days);
+  estimasi.setHours(23, 59, 0, 0);
+  return estimasi;
+}
+
+export function hitungEstimasiRevisi(fromDate: Date = new Date()): Date {
+  return new Date(fromDate.getTime() + 12 * 60 * 60 * 1000);
+}
+
+export function formatEstimasi(isoString: string): string {
+  const d = new Date(isoString);
+  const tgl = d.toLocaleDateString("id-ID", {
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
+  });
+  const jam = d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  return `${tgl}, pukul ${jam}`;
+}
+
+// ─── API hooks ────────────────────────────────────────────────
 
 export function useCreateOrder() {
   return useMutation({
@@ -103,12 +130,20 @@ export function useGetAllOrders() {
 
 export function useUpdateOrder() {
   return useMutation({
-    mutationFn: async ({ orderId, status }: { orderId: string; status: OrderStatus }) => {
+    mutationFn: async ({
+      orderId,
+      status,
+      estimasi_selesai,
+    }: {
+      orderId: string;
+      status: OrderStatus;
+      estimasi_selesai?: string;
+    }) => {
       if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
       const res = await fetch(GAS_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "updateStatus", order_id: orderId, status }),
+        body: JSON.stringify({ action: "updateStatus", order_id: orderId, status, estimasi_selesai }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.message || "Gagal update status");
@@ -155,10 +190,11 @@ export function useSubmitRevisi() {
       files: { base64: string; name: string }[];
     }) => {
       if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
+      const estimasi_revisi = hitungEstimasiRevisi(new Date()).toISOString();
       const res = await fetch(GAS_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "submitRevisi", order_id: orderId, catatan, files }),
+        body: JSON.stringify({ action: "submitRevisi", order_id: orderId, catatan, files, estimasi_revisi }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.message || "Gagal submit revisi");

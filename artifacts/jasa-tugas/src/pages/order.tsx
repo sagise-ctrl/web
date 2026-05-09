@@ -32,7 +32,7 @@ const step1Schema = z.object({
 const step2Schema = z.object({
   jenis: z.enum(["Makalah", "PPT", "Artikel", "Tugas Harian"], { required_error: "Pilih jenis tugas." }),
   halaman: z.coerce.number().min(1, "Minimal 1."),
-  note: z.string().max(500, "Maksimal 500 karakter.").optional(),
+  note: z.string().max(1000, "Maksimal 1000 karakter.").optional(),
 });
 
 type Step1Values = z.infer<typeof step1Schema>;
@@ -462,11 +462,11 @@ export default function OrderPage() {
                         <Textarea
                           placeholder="Jelaskan topik, format, atau instruksi khusus..."
                           className="min-h-[120px] resize-none"
-                          maxLength={500}
+                          maxLength={1000}
                           {...field}
                         />
                       </FormControl>
-                      <FormDescription className="text-right">{watchedNote.length}/500 karakter</FormDescription>
+                      <FormDescription className="text-right">{watchedNote.length}/1000 karakter</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )} />
