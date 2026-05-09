@@ -392,23 +392,21 @@ export default function OrderPage() {
                   <FormField control={form2.control} name="jenis" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Jenis Tugas</FormLabel>
-                      <FormControl>
-                        <select
-                          value={field.value || ""}
-                          onChange={(e) => {
-                            const val = e.target.value as JenisTugas;
-                            field.onChange(val);
-                            form2.setValue("halaman", halamanOptions(val)[0] || 1);
-                          }}
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
-                        >
-                          <option value="" disabled>Pilih jenis tugas</option>
-                          <option value="Makalah">Makalah</option>
-                          <option value="PPT">Presentasi (PPT)</option>
-                          <option value="Artikel">Artikel Ilmiah</option>
-                          <option value="Tugas Harian">Tugas Harian</option>
-                        </select>
-                      </FormControl>
+                      <select
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          const val = e.target.value as JenisTugas;
+                          field.onChange(val);
+                          form2.setValue("halaman", halamanOptions(val)[0] || 1);
+                        }}
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                      >
+                        <option value="" disabled>Pilih jenis tugas</option>
+                        <option value="Makalah">Makalah</option>
+                        <option value="PPT">Presentasi (PPT)</option>
+                        <option value="Artikel">Artikel Ilmiah</option>
+                        <option value="Tugas Harian">Tugas Harian</option>
+                      </select>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -419,19 +417,17 @@ export default function OrderPage() {
                         <FormLabel>
                           {watchedJenis === "PPT" ? "Jumlah Slide" : watchedJenis === "Tugas Harian" ? "Jumlah Lembar" : "Jumlah Halaman"}
                         </FormLabel>
-                        <FormControl>
-                          <select
-                            value={String(field.value)}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
-                          >
-                            {opts.map(n => (
-                              <option key={n} value={String(n)}>
-                                {n} {watchedJenis === "PPT" ? "slide" : watchedJenis === "Tugas Harian" ? "lembar" : "halaman"}
-                              </option>
-                            ))}
-                          </select>
-                        </FormControl>
+                        <select
+                          value={String(field.value)}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                        >
+                          {opts.map(n => (
+                            <option key={n} value={String(n)}>
+                              {n} {watchedJenis === "PPT" ? "slide" : watchedJenis === "Tugas Harian" ? "lembar" : "halaman"}
+                            </option>
+                          ))}
+                        </select>
                         <FormMessage />
                       </FormItem>
                     )} />
