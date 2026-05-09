@@ -1,16 +1,17 @@
 // ============================================================
-// JASA TUGAS - Google Apps Script Backend (v4)
+// JASA TUGAS - Google Apps Script Backend (v5)
 // ============================================================
 // ALUR STATUS:
 // verifikasi tugas → pembayaran awal → verifikasi pembayaran awal
-// → proses pengerjaan → menunggu pelunasan (admin upload hasil dulu)
+// → proses pengerjaan → menunggu pelunasan (admin upload hasil)
 // → menunggu verifikasi (customer upload bukti pelunasan)
-// → cek file (admin verifikasi) → selesai / revisi → cek file → selesai
+// → cek file (admin verifikasi) → customer pilih Selesai atau Revisi
+// → revisi → admin upload hasil revisi → selesai (langsung)
 //
-// CARA DEPLOY:
-// 1. Hapus semua kode lama di GAS, paste seluruh kode ini
-// 2. Pastikan SPREADSHEET_ID sudah benar
-// 3. Deploy > Manage deployments > edit > New version > Deploy
+// Upload "hasil" saat status "revisi" → selesai
+// Upload "hasil" saat status lain → menunggu pelunasan
+// Upload "bukti_dp" → verifikasi pembayaran awal
+// Upload "bukti_pelunasan" → menunggu verifikasi
 // ============================================================
 
 const SPREADSHEET_ID = "1M46VQj9eGn4_Pn_bg0u4IAcuqnaAekEAHo-yeVXV9Eo";
@@ -74,9 +75,7 @@ function getSheet() {
 }
 
 function generateOrderId() {
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 1000);
-  return "ORD-" + timestamp + "-" + random;
+  return "ORD-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
 }
 
 function rowToObject(row) {
@@ -104,36 +103,34 @@ function rowToObject(row) {
   };
 }
 
-// ─── GET handler ──────────────────────────────────────────────
+// ─── GET ──────────────────────────────────────────────────────
 function doGet(e) {
   const action = e.parameter.action;
   try {
     if (action === "getOrder") return handleGetOrder(e.parameter.order_id);
     if (action === "getAllOrders") return handleGetAllOrders();
     if (action === "checkWa") return handleCheckWa(e.parameter.wa);
-    return jsonResponse({ success: false, message: "Action tidak dikenal: " + action });
+    return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
-    return jsonResponse({ success: false, message: "Error: " + err.message });
+    return jsonResponse({ success: false, message: err.message });
   }
 }
 
-// ─── POST handler ─────────────────────────────────────────────
+// ─── POST ─────────────────────────────────────────────────────
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
-    const action = body.action;
-    if (action === "createOrder") return handleCreateOrder(body.data);
-    if (action === "updateStatus") return handleUpdateStatus(body.order_id, body.status);
-    if (action === "uploadFile") return handleUploadFile(body.order_id, body.tipe, body.fileBase64, body.fileName);
-    if (action === "submitRevisi") return handleSubmitRevisi(body.order_id, body.catatan, body.files);
-    if (action === "markSelesai") return handleMarkSelesai(body.order_id);
-    return jsonResponse({ success: false, message: "Action tidak dikenal: " + action });
+    if (body.action === "createOrder") return handleCreateOrder(body.data);
+    if (body.action === "updateStatus") return handleUpdateStatus(body.order_id, body.status);
+    if (body.action === "uploadFile") return handleUploadFile(body.order_id, body.tipe, body.fileBase64, body.fileName);
+    if (body.action === "submitRevisi") return handleSubmitRevisi(body.order_id, body.catatan, body.files);
+    if (body.action === "markSelesai") return handleMarkSelesai(body.order_id);
+    return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
-    return jsonResponse({ success: false, message: "Error: " + err.message });
+    return jsonResponse({ success: false, message: err.message });
   }
 }
 
-// ─── Cek WA ───────────────────────────────────────────────────
 function handleCheckWa(wa) {
   if (!wa) return jsonResponse({ success: false, message: "WA diperlukan" });
   const sheet = getSheet();
@@ -146,57 +143,36 @@ function handleCheckWa(wa) {
   return jsonResponse({ success: true, data: { exists: false } });
 }
 
-// ─── Buat order baru (status awal: verifikasi tugas) ──────────
 function handleCreateOrder(data) {
   if (!data.nama || !data.wa || !data.jenis || !data.halaman) {
     return jsonResponse({ success: false, message: "Data tidak lengkap" });
   }
   if (!VALID_JENIS.includes(data.jenis)) {
-    return jsonResponse({ success: false, message: "Jenis tugas tidak valid: " + data.jenis });
+    return jsonResponse({ success: false, message: "Jenis tugas tidak valid" });
   }
-
   const sheet = getSheet();
   const order_id = generateOrderId();
-  const created_at = new Date().toISOString();
   const dp = 10000;
   const harga = Number(data.harga) || 0;
-  const sisa_bayar = Math.max(0, harga - dp);
-
   sheet.appendRow([
-    order_id,
-    data.nama,
-    data.wa,
-    data.jenis,
-    Number(data.halaman),
-    data.deadline || "",
-    data.note || "",
-    "verifikasi tugas",
-    data.tipe_order || "standar",
-    harga,
-    dp,
-    sisa_bayar,
-    "", "", "", "",
-    created_at,
-    "", "", 0
+    order_id, data.nama, data.wa, data.jenis, Number(data.halaman),
+    data.deadline || "", data.note || "", "verifikasi tugas",
+    data.tipe_order || "standar", harga, dp, Math.max(0, harga - dp),
+    "", "", "", "", new Date().toISOString(), "", "", 0
   ]);
-
-  return jsonResponse({ success: true, order_id: order_id });
+  return jsonResponse({ success: true, order_id });
 }
 
-// ─── Ambil satu order ─────────────────────────────────────────
 function handleGetOrder(order_id) {
   if (!order_id) return jsonResponse({ success: false, message: "order_id diperlukan" });
   const sheet = getSheet();
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === order_id) {
-      return jsonResponse({ success: true, data: rowToObject(data[i]) });
-    }
+    if (data[i][0] === order_id) return jsonResponse({ success: true, data: rowToObject(data[i]) });
   }
   return jsonResponse({ success: false, message: "Order tidak ditemukan" });
 }
 
-// ─── Ambil semua order ────────────────────────────────────────
 function handleGetAllOrders() {
   const sheet = getSheet();
   const data = sheet.getDataRange().getValues();
@@ -209,34 +185,31 @@ function handleGetAllOrders() {
   return jsonResponse({ success: true, data: orders });
 }
 
-// ─── Update status ────────────────────────────────────────────
 function handleUpdateStatus(order_id, status) {
-  if (!order_id || !status) return jsonResponse({ success: false, message: "order_id dan status diperlukan" });
+  if (!order_id || !status) return jsonResponse({ success: false, message: "Parameter kurang" });
   if (!VALID_STATUSES.includes(status)) return jsonResponse({ success: false, message: "Status tidak valid: " + status });
   const sheet = getSheet();
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === order_id) {
       sheet.getRange(i + 1, COLUMNS.STATUS).setValue(status);
-      return jsonResponse({ success: true, message: "Status berhasil diupdate" });
+      return jsonResponse({ success: true });
     }
   }
   return jsonResponse({ success: false, message: "Order tidak ditemukan" });
 }
 
-// ─── Upload file ke Google Drive ──────────────────────────────
-// bukti_dp     → status: "verifikasi pembayaran awal"
-// bukti_pelunasan → status: "menunggu verifikasi"
-// hasil        → status: "menunggu pelunasan"
+// ─── Upload file ──────────────────────────────────────────────
+// bukti_dp       → verifikasi pembayaran awal
+// bukti_pelunasan → menunggu verifikasi
+// hasil (status normal) → menunggu pelunasan
+// hasil (status=revisi)  → selesai (langsung, tanpa perlu ke cek file lagi)
 function handleUploadFile(order_id, tipe, fileBase64, fileName) {
   if (!order_id || !tipe || !fileBase64 || !fileName) {
     return jsonResponse({ success: false, message: "Parameter tidak lengkap" });
   }
-
   const VALID_TIPE = ["bukti_dp", "bukti_pelunasan", "file_tugas", "hasil"];
-  if (!VALID_TIPE.includes(tipe)) {
-    return jsonResponse({ success: false, message: "Tipe file tidak valid" });
-  }
+  if (!VALID_TIPE.includes(tipe)) return jsonResponse({ success: false, message: "Tipe tidak valid" });
 
   const COLUMN_MAP = {
     file_tugas: COLUMNS.FILE_TUGAS_URL,
@@ -245,21 +218,11 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
     hasil: COLUMNS.HASIL_URL
   };
 
-  const STATUS_MAP = {
-    bukti_dp: "verifikasi pembayaran awal",
-    bukti_pelunasan: "menunggu verifikasi",
-    hasil: "menunggu pelunasan"
-  };
-
   try {
     const folder = DriveApp.getRootFolder();
-    const subFolder = getOrCreateFolder(folder, "JasaTugas-" + order_id);
-    const blob = Utilities.newBlob(
-      Utilities.base64Decode(fileBase64),
-      getMimeType(fileName),
-      fileName
-    );
-    const file = subFolder.createFile(blob);
+    const sub = getOrCreateFolder(folder, "JasaTugas-" + order_id);
+    const blob = Utilities.newBlob(Utilities.base64Decode(fileBase64), getMimeType(fileName), fileName);
+    const file = sub.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     const fileUrl = file.getUrl();
 
@@ -268,9 +231,23 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === order_id) {
         sheet.getRange(i + 1, COLUMN_MAP[tipe]).setValue(fileUrl);
-        if (STATUS_MAP[tipe]) {
-          sheet.getRange(i + 1, COLUMNS.STATUS).setValue(STATUS_MAP[tipe]);
+
+        // Atur status berdasarkan tipe file & status saat ini
+        if (tipe === "bukti_dp") {
+          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("verifikasi pembayaran awal");
+        } else if (tipe === "bukti_pelunasan") {
+          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("menunggu verifikasi");
+        } else if (tipe === "hasil") {
+          const currentStatus = String(data[i][COLUMNS.STATUS - 1]);
+          if (currentStatus === "revisi") {
+            // Setelah revisi selesai → langsung selesai
+            sheet.getRange(i + 1, COLUMNS.STATUS).setValue("selesai");
+          } else {
+            // Upload hasil pertama kali → customer perlu bayar pelunasan
+            sheet.getRange(i + 1, COLUMNS.STATUS).setValue("menunggu pelunasan");
+          }
         }
+
         return jsonResponse({ success: true, url: fileUrl });
       }
     }
@@ -280,32 +257,23 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
   }
 }
 
-// ─── Submit revisi oleh customer ─────────────────────────────
+// ─── Submit revisi (customer) ─────────────────────────────────
 function handleSubmitRevisi(order_id, catatan, files) {
   if (!order_id) return jsonResponse({ success: false, message: "order_id diperlukan" });
-
   const sheet = getSheet();
   const data = sheet.getDataRange().getValues();
-
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === order_id) {
       const revisiCount = Number(data[i][19]) || 0;
-      if (revisiCount >= 1) {
-        return jsonResponse({ success: false, message: "Revisi gratis sudah habis (maks 1 kali)" });
-      }
+      if (revisiCount >= 1) return jsonResponse({ success: false, message: "Revisi gratis sudah habis (maks 1 kali)" });
 
       const uploadedUrls = [];
       if (files && files.length > 0) {
-        const folder = DriveApp.getRootFolder();
-        const subFolder = getOrCreateFolder(folder, "JasaTugas-" + order_id);
+        const sub = getOrCreateFolder(DriveApp.getRootFolder(), "JasaTugas-" + order_id);
         for (const f of files) {
           try {
-            const blob = Utilities.newBlob(
-              Utilities.base64Decode(f.base64),
-              getMimeType(f.name),
-              "revisi_" + f.name
-            );
-            const file = subFolder.createFile(blob);
+            const blob = Utilities.newBlob(Utilities.base64Decode(f.base64), getMimeType(f.name), "revisi_" + f.name);
+            const file = sub.createFile(blob);
             file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
             uploadedUrls.push(file.getUrl());
           } catch (e) { /* lanjut */ }
@@ -316,8 +284,7 @@ function handleSubmitRevisi(order_id, catatan, files) {
       sheet.getRange(i + 1, COLUMNS.REVISI_FILE_URLS).setValue(uploadedUrls.join(","));
       sheet.getRange(i + 1, COLUMNS.REVISI_COUNT).setValue(revisiCount + 1);
       sheet.getRange(i + 1, COLUMNS.STATUS).setValue("revisi");
-
-      return jsonResponse({ success: true, message: "Revisi berhasil diajukan" });
+      return jsonResponse({ success: true });
     }
   }
   return jsonResponse({ success: false, message: "Order tidak ditemukan" });
@@ -344,15 +311,11 @@ function getOrCreateFolder(parent, name) {
 
 function getMimeType(fileName) {
   const ext = fileName.split(".").pop().toLowerCase();
-  const types = {
-    jpg: "image/jpeg", jpeg: "image/jpeg",
-    png: "image/png", pdf: "application/pdf"
-  };
-  return types[ext] || "application/octet-stream";
+  return { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", pdf: "application/pdf" }[ext] || "application/octet-stream";
 }
 
 function jsonResponse(data) {
-  const output = ContentService.createTextOutput(JSON.stringify(data));
-  output.setMimeType(ContentService.MimeType.JSON);
-  return output;
+  const out = ContentService.createTextOutput(JSON.stringify(data));
+  out.setMimeType(ContentService.MimeType.JSON);
+  return out;
 }

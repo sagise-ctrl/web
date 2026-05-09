@@ -37,19 +37,21 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// ─── Dialog upload hasil (sebelum set "menunggu pelunasan") ────
-function UploadHasilDialog({
-  orderId, title, nextStatus, description, onSuccess, onCancel,
+// ─── Dialog upload file ────────────────────────────────────────
+function UploadFileDialog({
+  orderId,
+  title,
+  description,
+  onSuccess,
+  onCancel,
 }: {
   orderId: string;
   title: string;
-  nextStatus: OrderStatus;
   description: string;
   onSuccess: () => void;
   onCancel: () => void;
 }) {
   const uploadBukti = useUploadBukti();
-  const updateOrder = useUpdateOrder();
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -59,13 +61,9 @@ function UploadHasilDialog({
     setUploading(true);
     try {
       const base64 = await fileToBase64(file);
+      // Tipe "hasil" — GAS akan atur status otomatis berdasarkan status saat ini
       await uploadBukti.mutateAsync({ orderId, tipe: "hasil", fileBase64: base64, fileName: file.name });
-      // Jika nextStatus bukan "menunggu pelunasan" (sudah diatur oleh GAS untuk upload hasil),
-      // update manual jika perlu ke status lain
-      if (nextStatus !== "menunggu pelunasan") {
-        await updateOrder.mutateAsync({ orderId, status: nextStatus });
-      }
-      toast({ title: "File berhasil diupload", description: `Status → ${nextStatus}` });
+      toast({ title: "File berhasil diupload!" });
       onSuccess();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Gagal Upload", description: err.message });
@@ -101,7 +99,7 @@ function UploadHasilDialog({
         <div className="flex gap-3">
           <Button variant="outline" className="flex-1" onClick={onCancel}>Batal</Button>
           <Button className="flex-1" disabled={!file || uploading} onClick={handleUpload}>
-            {uploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Mengupload...</> : "Upload & Set Status"}
+            {uploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Mengupload...</> : "Upload"}
           </Button>
         </div>
       </div>
@@ -153,17 +151,20 @@ function AdminDashboard() {
   const { data: orders = [], isLoading, refetch, isFetching } = useGetAllOrders();
   const updateOrder = useUpdateOrder();
 
-  // Dialog state: { orderId, type }
-  const [uploadDialog, setUploadDialog] = useState<{ orderId: string; type: "hasil" | "hasil_revisi" } | null>(null);
+  // Dialog: { orderId, type: "hasil_pertama" | "hasil_revisi" }
+  const [uploadDialog, setUploadDialog] = useState<{
+    orderId: string;
+    type: "hasil_pertama" | "hasil_revisi";
+  } | null>(null);
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
-    // Jika set ke "menunggu pelunasan", wajib upload file hasil dulu
+    // "Menunggu Pelunasan" → wajib upload file hasil tugas dulu
     if (newStatus === "menunggu pelunasan") {
-      setUploadDialog({ orderId, type: "hasil" });
+      setUploadDialog({ orderId, type: "hasil_pertama" });
       return;
     }
-    // Jika set ke "cek file" dari status revisi, wajib upload hasil revisi dulu
-    if (newStatus === "cek file") {
+    // "Selesai" dari status "revisi" → wajib upload hasil revisi dulu
+    if (newStatus === "selesai") {
       const order = orders.find(o => o.order_id === orderId);
       if (order?.status === "revisi") {
         setUploadDialog({ orderId, type: "hasil_revisi" });
@@ -181,28 +182,25 @@ function AdminDashboard() {
 
   const count = (s: string) => orders.filter(o => o.status === s).length;
   const needsAction = orders.filter(o =>
-    o.status === "verifikasi tugas" || o.status === "verifikasi pembayaran awal" || o.status === "menunggu verifikasi"
+    ["verifikasi tugas", "verifikasi pembayaran awal", "menunggu verifikasi", "revisi"].includes(o.status)
   ).length;
 
   return (
     <Layout>
-      {/* Upload dialog */}
-      {uploadDialog?.type === "hasil" && (
-        <UploadHasilDialog
+      {uploadDialog?.type === "hasil_pertama" && (
+        <UploadFileDialog
           orderId={uploadDialog.orderId}
           title="Upload File Hasil Tugas"
-          nextStatus="menunggu pelunasan"
-          description="Upload file hasil tugas sebelum mengubah status. Status akan berubah ke Menunggu Pelunasan setelah upload berhasil."
+          description="Upload file hasil tugas terlebih dahulu. Status akan otomatis berubah ke Menunggu Pelunasan."
           onSuccess={() => { setUploadDialog(null); refetch(); }}
           onCancel={() => setUploadDialog(null)}
         />
       )}
       {uploadDialog?.type === "hasil_revisi" && (
-        <UploadHasilDialog
+        <UploadFileDialog
           orderId={uploadDialog.orderId}
           title="Upload Hasil Revisi"
-          nextStatus="cek file"
-          description="Upload file hasil revisi. Status akan berubah ke Cek File agar customer bisa mengunduh."
+          description="Upload file hasil revisi. Status akan langsung berubah ke Selesai — customer dapat mengunduh hasilnya."
           onSuccess={() => { setUploadDialog(null); refetch(); }}
           onCancel={() => setUploadDialog(null)}
         />
@@ -308,7 +306,8 @@ function AdminDashboard() {
                             )}
                             {order.revisi_catatan && (
                               <div className="text-xs text-yellow-700 p-1 bg-yellow-50 rounded mt-1">
-                                <span className="font-medium">Revisi:</span> {String(order.revisi_catatan).slice(0, 50)}{String(order.revisi_catatan).length > 50 ? "…" : ""}
+                                <span className="font-medium">Revisi:</span>{" "}
+                                {String(order.revisi_catatan).slice(0, 50)}{String(order.revisi_catatan).length > 50 ? "…" : ""}
                               </div>
                             )}
                             {order.revisi_file_urls && String(order.revisi_file_urls).trim() &&
@@ -340,12 +339,14 @@ function AdminDashboard() {
                                 <SelectItem value="proses pengerjaan">Proses Pengerjaan</SelectItem>
                                 <SelectItem value="menunggu pelunasan">⚠️ Menunggu Pelunasan</SelectItem>
                                 <SelectItem value="menunggu verifikasi">Menunggu Verifikasi</SelectItem>
-                                <SelectItem value="cek file">⚠️ Cek File</SelectItem>
+                                <SelectItem value="cek file">Cek File</SelectItem>
                                 <SelectItem value="revisi">Revisi</SelectItem>
-                                <SelectItem value="selesai">Selesai</SelectItem>
+                                <SelectItem value="selesai">⚠️ Selesai</SelectItem>
                               </SelectContent>
                             </Select>
-                            <p className="text-xs text-slate-400">⚠️ = wajib upload file</p>
+                            <p className="text-xs text-slate-400 leading-tight">
+                              ⚠️ Menunggu Pelunasan & Selesai (dari revisi) = wajib upload file
+                            </p>
                           </div>
                         </TableCell>
                       </TableRow>

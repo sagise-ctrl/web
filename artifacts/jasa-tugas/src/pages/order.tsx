@@ -33,22 +33,29 @@ const step1Schema = z.object({
 const step2Schema = z.object({
   jenis: z.enum(["Makalah", "PPT", "Artikel", "Tugas Harian"], { required_error: "Pilih jenis tugas." }),
   halaman: z.coerce.number().min(1, "Minimal 1."),
-  tipe_order: z.enum(["standar", "ekspres", "super ekspres"]).default("standar"),
   note: z.string().max(500, "Maksimal 500 karakter.").optional(),
 });
 
 type Step1Values = z.infer<typeof step1Schema>;
 type Step2Values = z.infer<typeof step2Schema>;
 
+const WA_STORAGE_KEY = (wa: string) => `jt_wa_${wa}`;
+
 function halamanOptions(jenis: JenisTugas) {
   if (jenis === "Makalah" || jenis === "Artikel") {
-    const opts = []; for (let i = 10; i <= 80; i += 5) opts.push(i); return opts;
+    const opts: number[] = [];
+    for (let i = 10; i <= 80; i += 5) opts.push(i);
+    return opts;
   }
   if (jenis === "PPT") {
-    const opts = []; for (let i = 5; i <= 20; i++) opts.push(i); return opts;
+    const opts: number[] = [];
+    for (let i = 5; i <= 20; i++) opts.push(i);
+    return opts;
   }
   if (jenis === "Tugas Harian") {
-    const opts = []; for (let i = 2; i <= 15; i++) opts.push(i); return opts;
+    const opts: number[] = [];
+    for (let i = 2; i <= 15; i++) opts.push(i);
+    return opts;
   }
   return [];
 }
@@ -100,6 +107,9 @@ export default function OrderPage() {
   const [step2Data, setStep2Data] = useState<Step2Values | null>(null);
   const [successOrderId, setSuccessOrderId] = useState<string | null>(null);
 
+  // ── tipe_order stored in state (not form) so it NEVER resets ──
+  const [selectedTipe, setSelectedTipe] = useState<TipeOrder>("standar");
+
   const form1 = useForm<Step1Values>({
     resolver: zodResolver(step1Schema),
     defaultValues: { nama: "", wa: "" },
@@ -107,30 +117,49 @@ export default function OrderPage() {
 
   const form2 = useForm<Step2Values>({
     resolver: zodResolver(step2Schema),
-    defaultValues: { jenis: undefined, halaman: 10, tipe_order: "standar", note: "" },
+    defaultValues: { jenis: undefined, halaman: 10, note: "" },
   });
 
   const watchedJenis = form2.watch("jenis") as JenisTugas | undefined;
   const watchedHalaman = form2.watch("halaman");
-  const watchedTipe = form2.watch("tipe_order") as TipeOrder;
   const watchedNote = form2.watch("note") || "";
 
   const dp = 10000;
+  const hargaPreview = watchedJenis
+    ? hitungHarga(watchedJenis, watchedHalaman || halamanOptions(watchedJenis)[0] || 1) + biayaTambahan(selectedTipe)
+    : 0;
 
-  // ─── Step 1: cek WA ────────────────────────────────────────
+  // ─── Step 1: cek WA ─────────────────────────────────────────
   async function onStep1Submit(data: Step1Values) {
     setWaWarning(null);
-    try {
-      const result = await checkWa.mutateAsync(data.wa);
-      if (result.exists && result.nama_sebelumnya) {
-        const namaLama = result.nama_sebelumnya;
-        if (namaLama.toLowerCase() !== data.nama.toLowerCase()) {
-          setPendingStep1Data(data);
-          setWaWarning(`Nomor WhatsApp ini sudah terdaftar dengan nama "${namaLama}". Ingin lanjutkan dengan nama berbeda?`);
-          return;
+
+    // 1) Cek localStorage dulu (bekerja tanpa GAS)
+    const savedNama = localStorage.getItem(WA_STORAGE_KEY(data.wa));
+    if (savedNama && savedNama.toLowerCase() !== data.nama.toLowerCase()) {
+      setPendingStep1Data(data);
+      setWaWarning(`Nomor WA ini sudah terdaftar dengan nama "${savedNama}". Ingin lanjutkan dengan nama berbeda?`);
+      return;
+    }
+
+    // 2) Cek GAS jika URL tersedia
+    if (import.meta.env.VITE_GAS_URL) {
+      try {
+        const result = await checkWa.mutateAsync(data.wa);
+        if (result.exists && result.nama_sebelumnya) {
+          const namaLama = result.nama_sebelumnya;
+          // Simpan ke localStorage untuk cek berikutnya
+          localStorage.setItem(WA_STORAGE_KEY(data.wa), namaLama);
+          if (namaLama.toLowerCase() !== data.nama.toLowerCase()) {
+            setPendingStep1Data(data);
+            setWaWarning(`Nomor WA ini sudah terdaftar dengan nama "${namaLama}". Ingin lanjutkan dengan nama berbeda?`);
+            return;
+          }
         }
+      } catch {
+        // GAS tidak tersedia — lanjutkan
       }
-    } catch { /* lanjutkan jika cek gagal */ }
+    }
+
     setStep1Data(data);
     setStep(2);
   }
@@ -142,28 +171,32 @@ export default function OrderPage() {
     setStep(2);
   }
 
-  // ─── Step 2 ────────────────────────────────────────────────
+  // ─── Step 2 ──────────────────────────────────────────────────
   function onStep2Submit(data: Step2Values) {
-    setStep2Data(data);
+    // tipe_order diambil dari state terpisah, bukan form
+    setStep2Data({ ...data, tipe_order: selectedTipe } as any);
     setStep(3);
   }
 
-  // ─── Step 3: konfirmasi & kirim order ──────────────────────
+  // ─── Step 3: kirim order ─────────────────────────────────────
   async function onConfirmOrder() {
     if (!step1Data || !step2Data) return;
-    const hargaFinal = hitungHarga(step2Data.jenis, step2Data.halaman) + biayaTambahan(step2Data.tipe_order as TipeOrder);
+    const tipe = selectedTipe;
+    const hargaFinal = hitungHarga((step2Data as any).jenis, (step2Data as any).halaman) + biayaTambahan(tipe);
     try {
       const res = await createOrder.mutateAsync({
         nama: step1Data.nama,
         wa: step1Data.wa,
-        jenis: step2Data.jenis,
-        halaman: step2Data.halaman,
-        note: step2Data.note || "",
-        tipe_order: step2Data.tipe_order as TipeOrder,
+        jenis: (step2Data as any).jenis,
+        halaman: (step2Data as any).halaman,
+        note: (step2Data as any).note || "",
+        tipe_order: tipe,
         harga: hargaFinal,
         dp,
         sisa_bayar: Math.max(0, hargaFinal - dp),
       } as any);
+      // Simpan WA → nama ke localStorage untuk validasi berikutnya
+      localStorage.setItem(WA_STORAGE_KEY(step1Data.wa), step1Data.nama);
       setSuccessOrderId(res.order_id);
       setStep(4);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -179,11 +212,11 @@ export default function OrderPage() {
 
   function resetAll() {
     setStep(1); setSuccessOrderId(null); setStep1Data(null); setStep2Data(null);
-    setWaWarning(null); setPendingStep1Data(null);
+    setWaWarning(null); setPendingStep1Data(null); setSelectedTipe("standar");
     form1.reset(); form2.reset();
   }
 
-  // ─── Step 4: Sukses — tunggu verifikasi admin ──────────────
+  // ─── Step 4: Sukses ──────────────────────────────────────────
   if (step === 4 && successOrderId) {
     return (
       <Layout>
@@ -200,7 +233,6 @@ export default function OrderPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              {/* Order ID */}
               <div className="bg-slate-50 rounded-xl p-5 text-center border border-slate-200">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Order ID Anda</p>
                 <div className="flex items-center justify-center gap-3">
@@ -211,7 +243,6 @@ export default function OrderPage() {
                 </div>
               </div>
 
-              {/* Alur selanjutnya */}
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
                 <p className="text-sm font-semibold text-blue-800">Langkah Selanjutnya:</p>
                 <ol className="space-y-2">
@@ -235,7 +266,7 @@ export default function OrderPage() {
                 <AlertCircle className="h-4 w-4 text-yellow-600" />
                 <AlertTitle className="text-yellow-800">Simpan Order ID Anda!</AlertTitle>
                 <AlertDescription className="text-yellow-700">
-                  Gunakan Order ID <strong>{successOrderId}</strong> untuk memantau status pesanan di halaman tracking.
+                  Gunakan Order ID <strong>{successOrderId}</strong> untuk memantau status di halaman tracking.
                 </AlertDescription>
               </Alert>
 
@@ -254,11 +285,11 @@ export default function OrderPage() {
     );
   }
 
-  // ─── Step 3: Ringkasan ─────────────────────────────────────
+  // ─── Step 3: Ringkasan ────────────────────────────────────────
   if (step === 3 && step1Data && step2Data) {
-    const jenis = step2Data.jenis;
-    const halaman = step2Data.halaman;
-    const tipe = step2Data.tipe_order as TipeOrder;
+    const jenis = (step2Data as any).jenis as JenisTugas;
+    const halaman = (step2Data as any).halaman as number;
+    const tipe = selectedTipe;
     const hDasar = hitungHarga(jenis, halaman);
     const hTambahan = biayaTambahan(tipe);
     const hTotal = hDasar + hTambahan;
@@ -274,14 +305,14 @@ export default function OrderPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 overflow-hidden">
-                <Row label="Nama" value={step1Data.nama} />
-                <Row label="WhatsApp" value={step1Data.wa} />
-                <Row label="Jenis Tugas" value={jenis} />
-                <Row label="Jumlah" value={`${halaman} ${jenis === "PPT" ? "slide" : jenis === "Tugas Harian" ? "lembar" : "halaman"}`} />
-                <Row label="Tipe Layanan" value={
+                <SummaryRow label="Nama" value={step1Data.nama} />
+                <SummaryRow label="WhatsApp" value={step1Data.wa} />
+                <SummaryRow label="Jenis Tugas" value={jenis} />
+                <SummaryRow label="Jumlah" value={`${halaman} ${jenis === "PPT" ? "slide" : jenis === "Tugas Harian" ? "lembar" : "halaman"}`} />
+                <SummaryRow label="Tipe Layanan" value={
                   <Badge variant={tipe === "standar" ? "secondary" : tipe === "ekspres" ? "outline" : "destructive"} className="capitalize">{tipe}</Badge>
                 } />
-                {step2Data.note && <Row label="Catatan" value={step2Data.note} />}
+                {(step2Data as any).note && <SummaryRow label="Catatan" value={(step2Data as any).note} />}
               </div>
 
               <div className="bg-slate-50 rounded-xl p-4 space-y-2">
@@ -327,12 +358,9 @@ export default function OrderPage() {
     );
   }
 
-  // ─── Step 2: Detail Tugas ──────────────────────────────────
+  // ─── Step 2: Detail Tugas ─────────────────────────────────────
   if (step === 2) {
     const opts = watchedJenis ? halamanOptions(watchedJenis) : [];
-    const hPreview = watchedJenis
-      ? hitungHarga(watchedJenis, watchedHalaman || opts[0] || 1) + biayaTambahan(watchedTipe)
-      : 0;
 
     return (
       <Layout>
@@ -347,14 +375,18 @@ export default function OrderPage() {
               <Form {...form2}>
                 <form onSubmit={form2.handleSubmit(onStep2Submit)} className="space-y-5">
 
+                  {/* Jenis */}
                   <FormField control={form2.control} name="jenis" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Jenis Tugas</FormLabel>
-                      <Select value={field.value} onValueChange={(val) => {
-                        field.onChange(val);
-                        const o = halamanOptions(val as JenisTugas);
-                        form2.setValue("halaman", o[0] || 1);
-                      }}>
+                      <Select
+                        value={field.value}
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          const o = halamanOptions(val as JenisTugas);
+                          form2.setValue("halaman", o[0] || 1);
+                        }}
+                      >
                         <FormControl><SelectTrigger><SelectValue placeholder="Pilih jenis tugas" /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="Makalah">Makalah</SelectItem>
@@ -367,6 +399,7 @@ export default function OrderPage() {
                     </FormItem>
                   )} />
 
+                  {/* Halaman */}
                   {watchedJenis && (
                     <FormField control={form2.control} name="halaman" render={({ field }) => (
                       <FormItem>
@@ -388,21 +421,24 @@ export default function OrderPage() {
                     )} />
                   )}
 
-                  <FormField control={form2.control} name="tipe_order" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipe Layanan</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          <SelectItem value="standar">Standar (tanpa biaya tambahan)</SelectItem>
-                          <SelectItem value="ekspres">Ekspres (1 hari lebih cepat, +{formatRupiah(7000)})</SelectItem>
-                          <SelectItem value="super ekspres">Super Ekspres (2 hari lebih cepat, +{formatRupiah(15000)})</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
+                  {/* Tipe layanan — dikelola via state terpisah, bukan form field */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                      Tipe Layanan
+                    </label>
+                    <Select value={selectedTipe} onValueChange={(val) => setSelectedTipe(val as TipeOrder)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standar">Standar (tanpa biaya tambahan)</SelectItem>
+                        <SelectItem value="ekspres">Ekspres (1 hari lebih cepat, +{formatRupiah(7000)})</SelectItem>
+                        <SelectItem value="super ekspres">Super Ekspres (2 hari lebih cepat, +{formatRupiah(15000)})</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
+                  {/* Catatan */}
                   <FormField control={form2.control} name="note" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Catatan Tambahan (Opsional)</FormLabel>
@@ -419,10 +455,11 @@ export default function OrderPage() {
                     </FormItem>
                   )} />
 
+                  {/* Estimasi harga */}
                   {watchedJenis && (
                     <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex justify-between items-center">
                       <span className="text-sm font-medium text-slate-700">Estimasi Harga</span>
-                      <span className="text-lg font-bold text-primary">{formatRupiah(hPreview)}</span>
+                      <span className="text-lg font-bold text-primary">{formatRupiah(hargaPreview)}</span>
                     </div>
                   )}
 
@@ -443,7 +480,7 @@ export default function OrderPage() {
     );
   }
 
-  // ─── Step 1: Data Diri ────────────────────────────────────
+  // ─── Step 1: Data Diri ────────────────────────────────────────
   return (
     <Layout>
       <div className="max-w-2xl mx-auto py-8">
@@ -457,6 +494,7 @@ export default function OrderPage() {
             <Form {...form1}>
               <form onSubmit={form1.handleSubmit(onStep1Submit)} className="space-y-5">
 
+                {/* Peringatan WA — blokir progres, minta konfirmasi */}
                 {waWarning && (
                   <Alert className="bg-yellow-50 border-yellow-300">
                     <AlertCircle className="h-4 w-4 text-yellow-600" />
@@ -467,7 +505,7 @@ export default function OrderPage() {
                         <Button type="button" size="sm" variant="outline"
                           className="border-yellow-400 text-yellow-800 hover:bg-yellow-100"
                           onClick={() => { setWaWarning(null); setPendingStep1Data(null); }}>
-                          Ganti Nama/WA
+                          Ganti Nama / WA
                         </Button>
                         <Button type="button" size="sm"
                           className="bg-yellow-600 hover:bg-yellow-700 text-white"
@@ -512,7 +550,7 @@ export default function OrderPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between px-4 py-3 gap-4">
       <span className="text-sm text-slate-500 flex-shrink-0">{label}</span>
