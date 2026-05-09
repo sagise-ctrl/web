@@ -112,8 +112,10 @@ export default function OrderPage() {
   const [step2Data, setStep2Data] = useState<(Step2Values & { tipe_order: TipeOrder }) | null>(null);
   const [successOrderId, setSuccessOrderId] = useState<string | null>(null);
 
-  // tipe_order lives in state (not form) — never resets on re-render
+  // tipe_order, jenis, halaman lives in state (not form) — bypass FormControl/Slot interference
   const [selectedTipe, setSelectedTipe] = useState<TipeOrder>("standar");
+  const [selectedJenis, setSelectedJenis] = useState<JenisTugas | "">("");
+  const [selectedHalaman, setSelectedHalaman] = useState<number>(10);
 
   const form1 = useForm<Step1Values>({
     resolver: zodResolver(step1Schema),
@@ -125,13 +127,11 @@ export default function OrderPage() {
     defaultValues: { jenis: undefined, halaman: 10, note: "" },
   });
 
-  const watchedJenis = form2.watch("jenis") as JenisTugas | undefined;
-  const watchedHalaman = form2.watch("halaman");
   const watchedNote = form2.watch("note") || "";
   const dp = 10000;
 
-  const hargaPreview = watchedJenis
-    ? hitungHarga(watchedJenis, watchedHalaman || halamanOptions(watchedJenis)[0] || 1) + biayaTambahan(selectedTipe)
+  const hargaPreview = selectedJenis
+    ? hitungHarga(selectedJenis, selectedHalaman) + biayaTambahan(selectedTipe)
     : 0;
 
   // ─── Step 1: cek WA ─────────────────────────────────────────
@@ -229,6 +229,8 @@ export default function OrderPage() {
     setStep(1); setSuccessOrderId(null); setStep1Data(null); setStep2Data(null);
     setWaWarning(null); setNamaLama(null); setWaLama(null);
     setSelectedTipe("standar");
+    setSelectedJenis("");
+    setSelectedHalaman(10);
     form1.reset(); form2.reset();
   }
 
@@ -389,48 +391,54 @@ export default function OrderPage() {
               <Form {...form2}>
                 <form onSubmit={form2.handleSubmit(onStep2Submit)} className="space-y-5">
 
-                  <FormField control={form2.control} name="jenis" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Jenis Tugas</FormLabel>
+                  {/* Jenis Tugas — useState pattern, sama seperti Tipe Layanan */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium leading-none">Jenis Tugas</label>
+                    <select
+                      value={selectedJenis}
+                      onChange={(e) => {
+                        const val = e.target.value as JenisTugas;
+                        setSelectedJenis(val);
+                        const firstHalaman = halamanOptions(val)[0] || 1;
+                        setSelectedHalaman(firstHalaman);
+                        form2.setValue("jenis", val, { shouldValidate: true });
+                        form2.setValue("halaman", firstHalaman);
+                      }}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                    >
+                      <option value="" disabled>Pilih jenis tugas</option>
+                      <option value="Makalah">Makalah</option>
+                      <option value="PPT">Presentasi (PPT)</option>
+                      <option value="Artikel">Artikel Ilmiah</option>
+                      <option value="Tugas Harian">Tugas Harian</option>
+                    </select>
+                    {form2.formState.errors.jenis && (
+                      <p className="text-[0.8rem] font-medium text-destructive">{form2.formState.errors.jenis.message}</p>
+                    )}
+                  </div>
+
+                  {/* Jumlah Halaman/Slide — muncul setelah jenis dipilih */}
+                  {selectedJenis && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium leading-none">
+                        {selectedJenis === "PPT" ? "Jumlah Slide" : selectedJenis === "Tugas Harian" ? "Jumlah Lembar" : "Jumlah Halaman"}
+                      </label>
                       <select
-                        value={field.value || ""}
+                        value={String(selectedHalaman)}
                         onChange={(e) => {
-                          const val = e.target.value as JenisTugas;
-                          field.onChange(val);
-                          form2.setValue("halaman", halamanOptions(val)[0] || 1);
+                          const num = Number(e.target.value);
+                          setSelectedHalaman(num);
+                          form2.setValue("halaman", num);
                         }}
                         className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
                       >
-                        <option value="" disabled>Pilih jenis tugas</option>
-                        <option value="Makalah">Makalah</option>
-                        <option value="PPT">Presentasi (PPT)</option>
-                        <option value="Artikel">Artikel Ilmiah</option>
-                        <option value="Tugas Harian">Tugas Harian</option>
+                        {halamanOptions(selectedJenis).map(n => (
+                          <option key={n} value={String(n)}>
+                            {n} {selectedJenis === "PPT" ? "slide" : selectedJenis === "Tugas Harian" ? "lembar" : "halaman"}
+                          </option>
+                        ))}
                       </select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-
-                  {watchedJenis && (
-                    <FormField control={form2.control} name="halaman" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {watchedJenis === "PPT" ? "Jumlah Slide" : watchedJenis === "Tugas Harian" ? "Jumlah Lembar" : "Jumlah Halaman"}
-                        </FormLabel>
-                        <select
-                          value={String(field.value)}
-                          onChange={(e) => field.onChange(Number(e.target.value))}
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
-                        >
-                          {opts.map(n => (
-                            <option key={n} value={String(n)}>
-                              {n} {watchedJenis === "PPT" ? "slide" : watchedJenis === "Tugas Harian" ? "lembar" : "halaman"}
-                            </option>
-                          ))}
-                        </select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
+                    </div>
                   )}
 
                   {/* Tipe layanan — state terpisah, tidak reset */}
