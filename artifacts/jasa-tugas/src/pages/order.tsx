@@ -8,7 +8,6 @@ import {
   Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -393,18 +392,23 @@ export default function OrderPage() {
                   <FormField control={form2.control} name="jenis" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Jenis Tugas</FormLabel>
-                      <Select value={field.value} onValueChange={(val) => {
-                        field.onChange(val);
-                        form2.setValue("halaman", halamanOptions(val as JenisTugas)[0] || 1);
-                      }}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Pilih jenis tugas" /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          <SelectItem value="Makalah">Makalah</SelectItem>
-                          <SelectItem value="PPT">Presentasi (PPT)</SelectItem>
-                          <SelectItem value="Artikel">Artikel Ilmiah</SelectItem>
-                          <SelectItem value="Tugas Harian">Tugas Harian</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <select
+                          value={field.value || ""}
+                          onChange={(e) => {
+                            const val = e.target.value as JenisTugas;
+                            field.onChange(val);
+                            form2.setValue("halaman", halamanOptions(val)[0] || 1);
+                          }}
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                        >
+                          <option value="" disabled>Pilih jenis tugas</option>
+                          <option value="Makalah">Makalah</option>
+                          <option value="PPT">Presentasi (PPT)</option>
+                          <option value="Artikel">Artikel Ilmiah</option>
+                          <option value="Tugas Harian">Tugas Harian</option>
+                        </select>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -415,16 +419,19 @@ export default function OrderPage() {
                         <FormLabel>
                           {watchedJenis === "PPT" ? "Jumlah Slide" : watchedJenis === "Tugas Harian" ? "Jumlah Lembar" : "Jumlah Halaman"}
                         </FormLabel>
-                        <Select value={String(field.value)} onValueChange={(val) => field.onChange(Number(val))}>
-                          <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                          <SelectContent>
+                        <FormControl>
+                          <select
+                            value={String(field.value)}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                          >
                             {opts.map(n => (
-                              <SelectItem key={n} value={String(n)}>
+                              <option key={n} value={String(n)}>
                                 {n} {watchedJenis === "PPT" ? "slide" : watchedJenis === "Tugas Harian" ? "lembar" : "halaman"}
-                              </SelectItem>
+                              </option>
                             ))}
-                          </SelectContent>
-                        </Select>
+                          </select>
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
@@ -433,16 +440,15 @@ export default function OrderPage() {
                   {/* Tipe layanan — state terpisah, tidak reset */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium leading-none">Tipe Layanan</label>
-                    <Select value={selectedTipe} onValueChange={(val) => setSelectedTipe(val as TipeOrder)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="standar">Standar (tanpa biaya tambahan)</SelectItem>
-                        <SelectItem value="ekspres">Ekspres (1 hari lebih cepat, +{formatRupiah(7000)})</SelectItem>
-                        <SelectItem value="super ekspres">Super Ekspres (2 hari lebih cepat, +{formatRupiah(15000)})</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select
+                      value={selectedTipe}
+                      onChange={(e) => setSelectedTipe(e.target.value as TipeOrder)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                    >
+                      <option value="standar">Standar (tanpa biaya tambahan)</option>
+                      <option value="ekspres">Ekspres (1 hari lebih cepat, +{formatRupiah(7000)})</option>
+                      <option value="super ekspres">Super Ekspres (2 hari lebih cepat, +{formatRupiah(15000)})</option>
+                    </select>
                   </div>
 
                   <FormField control={form2.control} name="note" render={({ field }) => (
