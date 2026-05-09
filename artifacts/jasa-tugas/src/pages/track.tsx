@@ -323,11 +323,21 @@ export default function TrackPage() {
                   <p className="text-sm text-amber-700">
                     Pesanan Anda telah diverifikasi! Bayar DP <strong>{formatRupiah(dp)}</strong> via QRIS untuk memulai pengerjaan.
                   </p>
-                  {/* QRIS placeholder */}
-                  <div className="bg-white border-2 border-dashed border-amber-300 rounded-xl p-6 text-center">
-                    <CreditCard className="w-10 h-10 mx-auto text-slate-400 mb-2" />
-                    <p className="text-sm text-slate-500">Scan QRIS untuk DP {formatRupiah(dp)}</p>
-                    <p className="text-xs text-slate-400 mt-1">(Upload gambar QRIS ke public/qris.png)</p>
+                  <div className="bg-white border border-amber-200 rounded-xl p-4 text-center">
+                    <img
+                      src="/qris.png"
+                      alt="QRIS Pembayaran"
+                      className="mx-auto max-w-[220px] w-full rounded-lg"
+                      onError={e => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                        (e.currentTarget.nextElementSibling as HTMLElement).style.display = "flex";
+                      }}
+                    />
+                    <div className="hidden flex-col items-center gap-2 py-4">
+                      <CreditCard className="w-10 h-10 text-slate-400" />
+                      <p className="text-sm text-slate-500">Scan QRIS untuk DP {formatRupiah(dp)}</p>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 font-medium">Scan QRIS untuk DP {formatRupiah(dp)}</p>
                   </div>
                   <UploadArea file={dpFile} onFileChange={setDpFile} hint="JPG atau PDF" />
                   <Button className="w-full bg-amber-600 hover:bg-amber-700 text-white"
@@ -382,10 +392,21 @@ export default function TrackPage() {
                   <p className="text-sm text-cyan-700">
                     Tugas Anda sudah selesai! Bayar sisa <strong>{formatRupiah(sisa)}</strong> via QRIS untuk mengaktifkan file unduhan.
                   </p>
-                  <div className="bg-white border-2 border-dashed border-cyan-300 rounded-xl p-6 text-center">
-                    <CreditCard className="w-10 h-10 mx-auto text-slate-400 mb-2" />
-                    <p className="text-sm text-slate-500">Scan QRIS untuk pelunasan {formatRupiah(sisa)}</p>
-                    <p className="text-xs text-slate-400 mt-1">(Upload gambar QRIS ke public/qris.png)</p>
+                  <div className="bg-white border border-cyan-200 rounded-xl p-4 text-center">
+                    <img
+                      src="/qris.png"
+                      alt="QRIS Pembayaran"
+                      className="mx-auto max-w-[220px] w-full rounded-lg"
+                      onError={e => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                        (e.currentTarget.nextElementSibling as HTMLElement).style.display = "flex";
+                      }}
+                    />
+                    <div className="hidden flex-col items-center gap-2 py-4">
+                      <CreditCard className="w-10 h-10 text-slate-400" />
+                      <p className="text-sm text-slate-500">Scan QRIS untuk pelunasan {formatRupiah(sisa)}</p>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 font-medium">Scan QRIS untuk pelunasan {formatRupiah(sisa)}</p>
                   </div>
                   <UploadArea file={pelunasanFile} onFileChange={setPelunasanFile} hint="JPG atau PDF" />
                   <Button className="w-full" disabled={!pelunasanFile || uploadingPelunasan} onClick={onUploadPelunasan}>
