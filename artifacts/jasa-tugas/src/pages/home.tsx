@@ -17,13 +17,11 @@ export default function Home() {
       <div className="flex flex-col gap-16 py-8">
         <section className="text-center space-y-6 max-w-3xl mx-auto">
           <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight">
-            Fokus Belajar, <br className="hidden sm:inline" />
-            <span className="text-primary">Biar Kami Yang Urus Tugasmu</span>
+            Fokus belajar aja, <br className="hidden sm:inline" />
+            <span className="text-primary">tugasnya biar kami yang handle</span>
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-            Platform bantuan akademik terpercaya untuk mahasiswa Indonesia.
-            Makalah, Presentasi PPT, dan Artikel ilmiah diselesaikan tepat waktu
-            dengan kualitas terbaik.
+            Bantuan tugas buat mahasiswa yang pengen tetap santai tapi deadline aman. Makalah, PPT, sampai artikel ilmiah, kita kerjain rapi dan tepat waktu.
           </p>
           <div className="flex items-center justify-center gap-4 pt-4">
             <Link
@@ -48,8 +46,7 @@ export default function Home() {
             </div>
             <h3 className="text-xl font-bold text-slate-900">Makalah</h3>
             <p className="text-slate-600 text-sm">
-              Penulisan makalah terstruktur dengan referensi terpercaya dan
-              format rapi.
+              Makalah rapi, struktur jelas, referensi aman dipakai.
             </p>
           </div>
 
@@ -59,8 +56,7 @@ export default function Home() {
             </div>
             <h3 className="text-xl font-bold text-slate-900">Presentasi PPT</h3>
             <p className="text-slate-600 text-sm">
-              Desain slide presentasi yang menarik, profesional, dan mudah
-              dipahami.
+              PPT yang enak dilihat, nggak ngebosenin, tapi tetap profesional.
             </p>
           </div>
 
@@ -70,15 +66,14 @@ export default function Home() {
             </div>
             <h3 className="text-xl font-bold text-slate-900">Artikel Ilmiah</h3>
             <p className="text-slate-600 text-sm">
-              Penyusunan artikel akademik dengan analisis mendalam dan tata
-              bahasa baku.
+              Artikel ilmiah yang serius tapi tetap enak dibaca, bukan asal jadi.
             </p>
           </div>
         </section>
 
         <section className="bg-slate-900 text-white rounded-3xl p-8 sm:p-12 text-center my-8">
           <h2 className="text-2xl sm:text-3xl font-bold mb-8">
-            Kenapa Memilih Jasa Tugas?
+            Kenapa Tugasly?
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
             <div className="flex flex-col items-center gap-3">
