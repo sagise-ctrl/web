@@ -4,10 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-// PORT & BASE_PATH opsional — wajib di Replit, tidak ada di Vercel build
 const rawPort = process.env.PORT;
 const port = rawPort ? Number(rawPort) : 5173;
-
 const basePath = process.env.BASE_PATH ?? "/";
 
 export default defineConfig({
@@ -15,7 +13,8 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    runtimeErrorOverlay(),
+    // ✅ Hanya aktif saat development, tidak saat production build di Vercel
+    ...(process.env.NODE_ENV !== "production" ? [runtimeErrorOverlay()] : []),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [
