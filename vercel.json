@@ -3,7 +3,8 @@
   "outputDirectory": "artifacts/jasa-tugas/dist/public",
   "installCommand": "pnpm install",
   "framework": null,
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
