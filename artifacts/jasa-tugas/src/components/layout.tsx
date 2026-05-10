@@ -9,7 +9,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 text-primary font-bold text-xl transition-opacity hover:opacity-80">
             <BookOpen className="w-6 h-6" />
-            <span>Jasa Tugas</span>
+            <span>Tugasly</span>
           </Link>
           <nav className="flex items-center gap-6">
             <Link href="/" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">Beranda</Link>
