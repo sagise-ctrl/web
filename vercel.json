@@ -2,7 +2,9 @@
   "buildCommand": "cd artifacts/jasa-tugas && vite build",
   "outputDirectory": "artifacts/jasa-tugas/dist/public",
   "installCommand": "pnpm install",
+  "framework": null,
   "routes": [
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
+
