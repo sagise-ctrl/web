@@ -30,7 +30,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       <footer className="bg-slate-900 text-slate-400 py-8 text-center text-sm">
-        <p>&copy; {new Date().getFullYear()} Jasa Tugas. Platform terpercaya mahasiswa Indonesia.</p>
+        <p>&copy; {new Date().getFullYear()} Tugasly. Platform terpercaya mahasiswa Indonesia.</p>
         <div className="mt-4 flex justify-center gap-4">
           <Link href="/admin" className="hover:text-white transition-colors">Admin Dashboard</Link>
         </div>
