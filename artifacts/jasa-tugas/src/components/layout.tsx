@@ -18,7 +18,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      
+
       {!import.meta.env.VITE_GAS_URL && (
         <div className="bg-yellow-50 border-b border-yellow-200 text-yellow-800 px-4 py-3 text-sm text-center">
           <strong>Perhatian:</strong> Konfigurasi <code>VITE_GAS_URL</code> belum diatur. Aplikasi tidak dapat terhubung ke backend.
@@ -31,9 +31,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <footer className="bg-slate-900 text-slate-400 py-8 text-center text-sm">
         <p>&copy; {new Date().getFullYear()} Tugasly. Platform terpercaya mahasiswa Indonesia.</p>
-        <div className="mt-4 flex justify-center gap-4">
-          <Link href="/admin" className="hover:text-white transition-colors">Admin Dashboard</Link>
-        </div>
       </footer>
     </div>
   );
