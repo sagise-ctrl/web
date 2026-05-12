@@ -43,7 +43,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
           &copy; {new Date().getFullYear()} Tugasly. Platform terpercaya
           mahasiswa Indonesia.
         </p>
+        <p className="mt-2">
+          <Link href="/terms" className="hover:text-white transition-colors">
+            Syarat & Ketentuan
+          </Link>
+        </p>
       </footer>
+      <a
+        className="fixed bottom-6 right-6 z-50"
+        href={`https://wa.me/6285875630641?text=${encodeURIComponent("Halo Tugasly, saya ingin bertanya")}`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <img
+          src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"
+          alt="WA"
+          className="w-14 h-14"
+        />
+      </a>
     </div>
   );
 }
