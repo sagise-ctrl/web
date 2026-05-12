@@ -187,10 +187,15 @@ export function useUploadBukti() {
       fileBase64: string;
       fileName: string;
     }) => {
-      const res = await fetch(ADMIN_API_URL, {
+      // "hasil" hanya diupload admin — wajib JWT
+      // semua tipe lain (bukti_dp, bukti_pelunasan, file_tugas) diupload user — publik
+      const isAdminOnly = tipe === "hasil";
+      const endpoint = isAdminOnly ? ADMIN_API_URL : API_URL;
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
-        credentials: "include",
+        ...(isAdminOnly ? { credentials: "include" as const } : {}),
         body: JSON.stringify({
           action: "uploadFile",
           order_id: orderId,
