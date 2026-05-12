@@ -46,12 +46,17 @@ export interface WaCheckResult {
   nama_sebelumnya?: string;
 }
 
-const GAS_URL = import.meta.env.VITE_GAS_URL;
+const API_URL = "/api/proxy";
+const ADMIN_API_URL = "/api/admin/proxy";
 
 // ─── Estimasi helpers ─────────────────────────────────────────
 
-export function hitungEstimasiSelesai(tipeOrder: TipeOrder | string | undefined, fromDate: Date = new Date()): Date {
-  const days = tipeOrder === "super ekspres" ? 1 : tipeOrder === "ekspres" ? 2 : 4;
+export function hitungEstimasiSelesai(
+  tipeOrder: TipeOrder | string | undefined,
+  fromDate: Date = new Date(),
+): Date {
+  const days =
+    tipeOrder === "super ekspres" ? 1 : tipeOrder === "ekspres" ? 2 : 4;
   const estimasi = new Date(fromDate);
   estimasi.setDate(estimasi.getDate() + days);
   estimasi.setHours(23, 59, 0, 0);
@@ -65,9 +70,15 @@ export function hitungEstimasiRevisi(fromDate: Date = new Date()): Date {
 export function formatEstimasi(isoString: string): string {
   const d = new Date(isoString);
   const tgl = d.toLocaleDateString("id-ID", {
-    weekday: "long", day: "2-digit", month: "long", year: "numeric",
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
   });
-  const jam = d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  const jam = d.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return `${tgl}, pukul ${jam}`;
 }
 
@@ -76,8 +87,7 @@ export function formatEstimasi(isoString: string): string {
 export function useCreateOrder() {
   return useMutation({
     mutationFn: async (data: Omit<Order, "order_id" | "status">) => {
-      if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
-      const res = await fetch(GAS_URL, {
+      const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({ action: "createOrder", data }),
@@ -92,8 +102,9 @@ export function useCreateOrder() {
 export function useCheckWa() {
   return useMutation({
     mutationFn: async (wa: string): Promise<WaCheckResult> => {
-      if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
-      const res = await fetch(`${GAS_URL}?action=checkWa&wa=${encodeURIComponent(wa)}`);
+      const res = await fetch(
+        `${API_URL}?action=checkWa&wa=${encodeURIComponent(wa)}`,
+      );
       const json = await res.json();
       if (!json.success) throw new Error(json.message || "Gagal cek nomor WA");
       return json.data as WaCheckResult;
@@ -105,10 +116,10 @@ export function useGetOrder(orderId: string) {
   return useQuery({
     queryKey: ["order", orderId],
     queryFn: async () => {
-      if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
-      const res = await fetch(`${GAS_URL}?action=getOrder&order_id=${orderId}`);
+      const res = await fetch(`${API_URL}?action=getOrder&order_id=${orderId}`);
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Order tidak ditemukan");
+      if (!json.success)
+        throw new Error(json.message || "Order tidak ditemukan");
       return json.data as Order;
     },
     enabled: !!orderId,
@@ -121,10 +132,12 @@ export function useGetAllOrders() {
   return useQuery({
     queryKey: ["orders"],
     queryFn: async () => {
-      if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
-      const res = await fetch(`${GAS_URL}?action=getAllOrders`);
+      const res = await fetch(`${ADMIN_API_URL}?action=getAllOrders`, {
+        credentials: "include",
+      });
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal mengambil daftar order");
+      if (!json.success)
+        throw new Error(json.message || "Gagal mengambil daftar order");
       return json.data as Order[];
     },
     refetchInterval: 20000,
@@ -143,11 +156,16 @@ export function useUpdateOrder() {
       status: OrderStatus;
       estimasi_selesai?: string;
     }) => {
-      if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
-      const res = await fetch(GAS_URL, {
+      const res = await fetch(ADMIN_API_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "updateStatus", order_id: orderId, status, estimasi_selesai }),
+        credentials: "include",
+        body: JSON.stringify({
+          action: "updateStatus",
+          order_id: orderId,
+          status,
+          estimasi_selesai,
+        }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.message || "Gagal update status");
@@ -169,11 +187,17 @@ export function useUploadBukti() {
       fileBase64: string;
       fileName: string;
     }) => {
-      if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
-      const res = await fetch(GAS_URL, {
+      const res = await fetch(ADMIN_API_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "uploadFile", order_id: orderId, tipe, fileBase64, fileName }),
+        credentials: "include",
+        body: JSON.stringify({
+          action: "uploadFile",
+          order_id: orderId,
+          tipe,
+          fileBase64,
+          fileName,
+        }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.message || "Gagal upload file");
@@ -193,12 +217,17 @@ export function useSubmitRevisi() {
       catatan: string;
       files: { base64: string; name: string }[];
     }) => {
-      if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
       const estimasi_revisi = hitungEstimasiRevisi(new Date()).toISOString();
-      const res = await fetch(GAS_URL, {
+      const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "submitRevisi", order_id: orderId, catatan, files, estimasi_revisi }),
+        body: JSON.stringify({
+          action: "submitRevisi",
+          order_id: orderId,
+          catatan,
+          files,
+          estimasi_revisi,
+        }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.message || "Gagal submit revisi");
@@ -210,14 +239,14 @@ export function useSubmitRevisi() {
 export function useMarkSelesai() {
   return useMutation({
     mutationFn: async (orderId: string) => {
-      if (!GAS_URL) throw new Error("VITE_GAS_URL is not defined");
-      const res = await fetch(GAS_URL, {
+      const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({ action: "markSelesai", order_id: orderId }),
       });
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal tandai selesai");
+      if (!json.success)
+        throw new Error(json.message || "Gagal tandai selesai");
       return json;
     },
   });

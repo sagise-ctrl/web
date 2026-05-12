@@ -444,6 +444,8 @@ function AdminActionCell({
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   if (!isAuthenticated) {
     return (
@@ -458,10 +460,27 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  if (password === "ibrahim99") setIsAuthenticated(true);
-                  else alert("Password salah");
+                  setIsLoading(true);
+                  setLoginError("");
+                  try {
+                    const res = await fetch("/api/auth/login", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({ password }),
+                    });
+                    if (res.ok) {
+                      setIsAuthenticated(true);
+                    } else {
+                      setLoginError("Password salah");
+                    }
+                  } catch {
+                    setLoginError("Gagal terhubung ke server");
+                  } finally {
+                    setIsLoading(false);
+                  }
                 }}
                 className="space-y-4"
               >
@@ -472,8 +491,13 @@ export default function AdminPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                 />
-                <Button type="submit" className="w-full">
-                  Masuk
+                {loginError && (
+                  <p className="text-sm text-red-600 text-center">
+                    {loginError}
+                  </p>
+                )}
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? "Memverifikasi..." : "Masuk"}
                 </Button>
               </form>
             </CardContent>
@@ -801,16 +825,18 @@ function AdminDashboard() {
                                   </span>
                                 </button>
                               )}
-                            {order.file_tugas_url && String(order.file_tugas_url).trim() && (
-                              <a
-                                href={String(order.file_tugas_url).trim()}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                              >
-                                <ExternalLink className="w-3 h-3" /> File Pendukung
-                              </a>
-                            )}
+                            {order.file_tugas_url &&
+                              String(order.file_tugas_url).trim() && (
+                                <a
+                                  href={String(order.file_tugas_url).trim()}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                                >
+                                  <ExternalLink className="w-3 h-3" /> File
+                                  Pendukung
+                                </a>
+                              )}
                             {order.hasil_url && (
                               <a
                                 href={order.hasil_url}
