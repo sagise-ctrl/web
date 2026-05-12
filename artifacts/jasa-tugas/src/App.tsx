@@ -7,6 +7,7 @@ import Home from "@/pages/home";
 import OrderPage from "@/pages/order";
 import TrackPage from "@/pages/track";
 import AdminPage from "@/pages/admin";
+import TermsPage from "@/pages/terms";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/order" component={OrderPage} />
       <Route path="/track" component={TrackPage} />
       <Route path="/admin" component={AdminPage} />
+      <Route path="/terms" component={TermsPage} />
       <Route component={NotFound} />
     </Switch>
   );
