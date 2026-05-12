@@ -1,8 +1,8 @@
 {
-  "extends": "../../tsconfig.base.json",
   "include": ["src/**/*", "api/**/*"],
-  "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
+  "exclude": ["node_modules", "build", "dist"],
   "compilerOptions": {
+    "target": "ES2020",
     "noEmit": false,
     "jsx": "preserve",
     "lib": ["esnext", "dom", "dom.iterable"],
@@ -13,13 +13,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["node", "vite/client"],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  },
-  "references": [
-    {
-      "path": "../../lib/api-client-react"
-    }
-  ]
+    "paths": { "@/*": ["./src/*"] }
+  }
 }
