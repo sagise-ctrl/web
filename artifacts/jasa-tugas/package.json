@@ -2,7 +2,6 @@
   "name": "@workspace/jasa-tugas",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
