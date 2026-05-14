@@ -1,21 +1,18 @@
 import { useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation } from "wouter";
 
 export default function PaymentFinish() {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const [, navigate] = useLocation();
 
   useEffect(() => {
-    const orderId = searchParams.get("order_id");
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get("order_id");
+
     if (orderId) {
-      // Midtrans kirim order_id dengan format ORD-xxx-DP atau ORD-xxx-FINAL
-      // Kita ambil bagian aslinya
-      const realOrderId = orderId
-        .replace(/-DP$|-FINAL$/, "")
-        .replace(/-DP-\d+$|-FINAL-\d+$/, "");
-      navigate(`/track?id=${realOrderId}`, { replace: true });
+      const realOrderId = orderId.replace(/-DP$|-FINAL$/, "");
+      navigate(`/track?id=${realOrderId}`);
     } else {
-      navigate("/", { replace: true });
+      navigate("/");
     }
   }, []);
 
