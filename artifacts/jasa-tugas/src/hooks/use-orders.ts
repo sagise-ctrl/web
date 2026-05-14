@@ -2,16 +2,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 
 export type OrderStatus =
   | "verifikasi tugas"
-  | "pembayaran awal"
-  | "verifikasi pembayaran awal"
+  | "menunggu pembayaran dp"
   | "proses pengerjaan"
   | "menunggu pelunasan"
-  | "menunggu verifikasi"
+  | "pelunasan diterima"
   | "cek file"
   | "revisi"
-  | "selesai"
-  | "pending"
-  | "proses";
+  | "selesai";
 
 export type JenisTugas = "Makalah" | "PPT" | "Artikel" | "Tugas Harian";
 export type TipeOrder = "standar" | "ekspres" | "super ekspres";
@@ -30,8 +27,6 @@ export interface Order {
   dp?: number;
   sisa_bayar?: number;
   file_tugas_url?: string;
-  bukti_dp_url?: string;
-  bukti_pelunasan_url?: string;
   hasil_url?: string;
   created_at?: string;
   revisi_catatan?: string;
@@ -39,6 +34,9 @@ export interface Order {
   revisi_count?: number;
   estimasi_selesai?: string;
   estimasi_revisi?: string;
+  snap_token?: string;
+  payment_dp_id?: string;
+  payment_final_id?: string;
 }
 
 export interface WaCheckResult {
@@ -183,12 +181,10 @@ export function useUploadBukti() {
       fileName,
     }: {
       orderId: string;
-      tipe: "bukti_dp" | "bukti_pelunasan" | "file_tugas" | "hasil";
+      tipe: "file_tugas" | "hasil";
       fileBase64: string;
       fileName: string;
     }) => {
-      // "hasil" hanya diupload admin — wajib JWT
-      // semua tipe lain (bukti_dp, bukti_pelunasan, file_tugas) diupload user — publik
       const isAdminOnly = tipe === "hasil";
       const endpoint = isAdminOnly ? ADMIN_API_URL : API_URL;
 

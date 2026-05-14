@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import {
   useGetOrder,
-  useUploadBukti,
   useSubmitRevisi,
   useMarkSelesai,
   type OrderStatus,
@@ -33,19 +32,32 @@ import {
 } from "@/hooks/use-orders";
 import { useToast } from "@/hooks/use-toast";
 
+// ─── Snap global type ──────────────────────────────────────────
+declare global {
+  interface Window {
+    snap: {
+      pay: (
+        token: string,
+        options: {
+          onSuccess?: (result: any) => void;
+          onPending?: (result: any) => void;
+          onError?: (result: any) => void;
+          onClose?: () => void;
+        },
+      ) => void;
+    };
+  }
+}
+
 // ─── Status badge ──────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   "verifikasi tugas": {
     label: "Menunggu Verifikasi",
     cls: "bg-orange-50 text-orange-700 border-orange-200",
   },
-  "pembayaran awal": {
+  "menunggu pembayaran dp": {
     label: "Menunggu Pembayaran DP",
     cls: "bg-amber-50 text-amber-700 border-amber-200",
-  },
-  "verifikasi pembayaran awal": {
-    label: "Verifikasi DP",
-    cls: "bg-purple-50 text-purple-700 border-purple-200",
   },
   "proses pengerjaan": {
     label: "Sedang Dikerjakan",
@@ -55,9 +67,9 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
     label: "Menunggu Pelunasan",
     cls: "bg-cyan-50 text-cyan-700 border-cyan-200",
   },
-  "menunggu verifikasi": {
-    label: "Verifikasi Pelunasan",
-    cls: "bg-purple-50 text-purple-700 border-purple-200",
+  "pelunasan diterima": {
+    label: "Pelunasan Diterima",
+    cls: "bg-teal-50 text-teal-700 border-teal-200",
   },
   "cek file": {
     label: "Cek File",
@@ -88,9 +100,9 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 // ─── Progress bar ──────────────────────────────────────────────
 const PROGRESS_STEPS = [
   { keys: ["verifikasi tugas"], label: "Verifikasi" },
-  { keys: ["pembayaran awal", "verifikasi pembayaran awal"], label: "DP" },
+  { keys: ["menunggu pembayaran dp"], label: "Bayar DP" },
   { keys: ["proses pengerjaan"], label: "Dikerjakan" },
-  { keys: ["menunggu pelunasan", "menunggu verifikasi"], label: "Pelunasan" },
+  { keys: ["menunggu pelunasan", "pelunasan diterima"], label: "Pelunasan" },
   { keys: ["cek file", "revisi"], label: "Cek File" },
   { keys: ["selesai"], label: "Selesai" },
 ];
@@ -144,39 +156,93 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// ─── Upload area ──────────────────────────────────────────────
-function UploadArea({
-  file,
-  onFileChange,
-  accept = ".jpg,.jpeg,.pdf",
-  hint = "JPG atau PDF",
+// ─── Tombol Bayar Midtrans ────────────────────────────────────
+function TombolBayar({
+  orderId,
+  tipe,
+  label,
+  nominal,
+  onSuccess,
 }: {
-  file: File | null;
-  onFileChange: (f: File | null) => void;
-  accept?: string;
-  hint?: string;
+  orderId: string;
+  tipe: "dp" | "final";
+  label: string;
+  nominal: number;
+  onSuccess: () => void;
 }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+
+  async function handleBayar() {
+    setLoading(true);
+    try {
+      // 1. Minta token dari server
+      const res = await fetch("/api/midtrans/create-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: orderId, tipe }),
+      });
+      const data = await res.json();
+
+      if (!data.success || !data.token) {
+        throw new Error(data.message || "Gagal mendapat token pembayaran");
+      }
+
+      // 2. Buka Snap popup
+      window.snap.pay(data.token, {
+        onSuccess: () => {
+          toast({
+            title: "Pembayaran Berhasil!",
+            description: "Status order sedang diperbarui...",
+          });
+          // Polling refetch sampai status berubah
+          setTimeout(onSuccess, 3000);
+        },
+        onPending: () => {
+          toast({
+            title: "Pembayaran Pending",
+            description: "Selesaikan pembayaran Anda.",
+          });
+        },
+        onError: () => {
+          toast({
+            variant: "destructive",
+            title: "Pembayaran Gagal",
+            description: "Silakan coba lagi.",
+          });
+        },
+        onClose: () => {
+          toast({
+            title: "Popup Ditutup",
+            description: "Pembayaran belum diselesaikan.",
+          });
+        },
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Gagal Memproses Pembayaran",
+        description: err.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <label className="border-2 border-dashed border-slate-300 rounded-xl p-5 text-center cursor-pointer hover:border-primary transition-colors flex flex-col items-center gap-2">
-      {file ? (
-        <div className="flex items-center gap-2 text-green-700">
-          <CheckCircle className="w-5 h-5" />
-          <span className="text-sm font-medium">{file.name}</span>
-        </div>
+    <Button className="w-full" disabled={loading} onClick={handleBayar}>
+      {loading ? (
+        <>
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          Memproses...
+        </>
       ) : (
         <>
-          <Upload className="w-7 h-7 text-slate-400" />
-          <p className="text-sm text-slate-500">Klik untuk pilih file</p>
-          <p className="text-xs text-slate-400">{hint}</p>
+          <CreditCard className="w-4 h-4 mr-2" />
+          {label} {formatRupiah(nominal)}
         </>
       )}
-      <input
-        type="file"
-        accept={accept}
-        className="hidden"
-        onChange={(e) => onFileChange(e.target.files?.[0] || null)}
-      />
-    </label>
+    </Button>
   );
 }
 
@@ -185,15 +251,8 @@ export default function TrackPage() {
   const [searchId, setSearchId] = useState("");
   const [submittedId, setSubmittedId] = useState("");
   const { toast } = useToast();
-  const uploadBukti = useUploadBukti();
   const submitRevisi = useSubmitRevisi();
   const markSelesai = useMarkSelesai();
-
-  const [dpFile, setDpFile] = useState<File | null>(null);
-  const [uploadingDp, setUploadingDp] = useState(false);
-
-  const [pelunasanFile, setPelunasanFile] = useState<File | null>(null);
-  const [uploadingPelunasan, setUploadingPelunasan] = useState(false);
 
   const [showRevisiForm, setShowRevisiForm] = useState(false);
   const [revisiCatatan, setRevisiCatatan] = useState("");
@@ -228,64 +287,6 @@ export default function TrackPage() {
       window.history.pushState({}, "", url.toString());
     }
   };
-
-  // Upload bukti DP
-  async function onUploadDp() {
-    if (!dpFile || !order) return;
-    setUploadingDp(true);
-    try {
-      const base64 = await fileToBase64(dpFile);
-      await uploadBukti.mutateAsync({
-        orderId: order.order_id,
-        tipe: "bukti_dp",
-        fileBase64: base64,
-        fileName: dpFile.name,
-      });
-      toast({
-        title: "Bukti DP terkirim!",
-        description: "Admin akan memverifikasi pembayaran DP Anda.",
-      });
-      setDpFile(null);
-      refetch();
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Gagal Upload",
-        description: err.message,
-      });
-    } finally {
-      setUploadingDp(false);
-    }
-  }
-
-  // Upload bukti pelunasan
-  async function onUploadPelunasan() {
-    if (!pelunasanFile || !order) return;
-    setUploadingPelunasan(true);
-    try {
-      const base64 = await fileToBase64(pelunasanFile);
-      await uploadBukti.mutateAsync({
-        orderId: order.order_id,
-        tipe: "bukti_pelunasan",
-        fileBase64: base64,
-        fileName: pelunasanFile.name,
-      });
-      toast({
-        title: "Bukti pelunasan terkirim!",
-        description: "Admin akan memverifikasi dan mengaktifkan file unduhan.",
-      });
-      setPelunasanFile(null);
-      refetch();
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Gagal Upload",
-        description: err.message,
-      });
-    } finally {
-      setUploadingPelunasan(false);
-    }
-  }
 
   // Submit revisi
   async function onSubmitRevisi() {
@@ -353,10 +354,8 @@ export default function TrackPage() {
   }
 
   const harga = order?.harga ? Number(order.harga) : 0;
-  const dp = order?.dp ? Number(order.dp) : 10000;
-  const sisa = order?.sisa_bayar
-    ? Number(order.sisa_bayar)
-    : Math.max(0, harga - dp);
+  const dp = order?.dp ? Number(order.dp) : 0;
+  const sisa = order?.sisa_bayar ? Number(order.sisa_bayar) : 0;
   const sudahRevisi = Number(order?.revisi_count) >= 1;
 
   return (
@@ -485,7 +484,6 @@ export default function TrackPage() {
                       value={order.note}
                     />
                   )}
-                  {/* Tampilkan file pendukung jika ada (read-only) */}
                   {order.file_tugas_url &&
                     String(order.file_tugas_url).trim() && (
                       <Row
@@ -507,7 +505,7 @@ export default function TrackPage() {
               </CardContent>
             </Card>
 
-            {/* ── Menunggu Verifikasi Admin ── */}
+            {/* ── Verifikasi Tugas ── */}
             {order.status === "verifikasi tugas" && (
               <Alert className="bg-orange-50 border-orange-200">
                 <Loader2 className="h-4 w-4 text-orange-600 animate-spin" />
@@ -521,8 +519,8 @@ export default function TrackPage() {
               </Alert>
             )}
 
-            {/* ── Pembayaran Awal (DP) ── */}
-            {order.status === "pembayaran awal" && (
+            {/* ── Menunggu Pembayaran DP ── */}
+            {order.status === "menunggu pembayaran dp" && (
               <Card className="border-amber-200 bg-amber-50">
                 <CardContent className="p-5 space-y-4">
                   <div className="flex items-center gap-2 text-amber-800 font-semibold">
@@ -531,67 +529,19 @@ export default function TrackPage() {
                   </div>
                   <p className="text-sm text-amber-700">
                     Pesanan Anda telah diverifikasi! Bayar DP{" "}
-                    <strong>{formatRupiah(dp)}</strong> via QRIS untuk memulai
-                    pengerjaan.
+                    <strong>{formatRupiah(dp)}</strong> untuk memulai
+                    pengerjaan. Anda bisa bayar via transfer bank, QRIS,
+                    e-wallet, dan lainnya.
                   </p>
-                  <div className="bg-white border border-amber-200 rounded-xl p-4 text-center">
-                    <img
-                      src="/qris.png"
-                      alt="QRIS Pembayaran"
-                      className="mx-auto max-w-[220px] w-full rounded-lg"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display =
-                          "none";
-                        (
-                          e.currentTarget.nextElementSibling as HTMLElement
-                        ).style.display = "flex";
-                      }}
-                    />
-                    <div className="hidden flex-col items-center gap-2 py-4">
-                      <CreditCard className="w-10 h-10 text-slate-400" />
-                      <p className="text-sm text-slate-500">
-                        Scan QRIS untuk DP {formatRupiah(dp)}
-                      </p>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-2 font-medium">
-                      Scan QRIS untuk DP {formatRupiah(dp)}
-                    </p>
-                  </div>
-                  <UploadArea
-                    file={dpFile}
-                    onFileChange={setDpFile}
-                    hint="JPG atau PDF"
+                  <TombolBayar
+                    orderId={order.order_id}
+                    tipe="dp"
+                    label="Bayar DP"
+                    nominal={dp}
+                    onSuccess={() => refetch()}
                   />
-                  <Button
-                    className="w-full bg-amber-600 hover:bg-amber-700 text-white"
-                    disabled={!dpFile || uploadingDp}
-                    onClick={onUploadDp}
-                  >
-                    {uploadingDp ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Mengupload...
-                      </>
-                    ) : (
-                      "Kirim Bukti Transfer DP"
-                    )}
-                  </Button>
                 </CardContent>
               </Card>
-            )}
-
-            {/* ── Verifikasi Pembayaran Awal ── */}
-            {order.status === "verifikasi pembayaran awal" && (
-              <Alert className="bg-purple-50 border-purple-200">
-                <Loader2 className="h-4 w-4 text-purple-600 animate-spin" />
-                <AlertTitle className="text-purple-800">
-                  DP Sedang Diverifikasi
-                </AlertTitle>
-                <AlertDescription className="text-purple-700">
-                  Admin sedang memverifikasi bukti DP Anda. Pengerjaan akan
-                  dimulai setelah DP terverifikasi.
-                </AlertDescription>
-              </Alert>
             )}
 
             {/* ── Proses Pengerjaan ── */}
@@ -603,7 +553,7 @@ export default function TrackPage() {
                     Tugas Sedang Dikerjakan
                   </AlertTitle>
                   <AlertDescription className="text-blue-700">
-                    DP Anda sudah terverifikasi. Tugas sedang dalam proses
+                    Pembayaran DP berhasil. Tugas sedang dalam proses
                     pengerjaan, kami akan menghubungi Anda jika ada pertanyaan.
                   </AlertDescription>
                 </Alert>
@@ -632,66 +582,31 @@ export default function TrackPage() {
                     <span>Lakukan Pembayaran Pelunasan</span>
                   </div>
                   <p className="text-sm text-cyan-700">
-                    Tugas Anda sudah selesai! Bayar sisa{" "}
-                    <strong>{formatRupiah(sisa)}</strong> via QRIS untuk
-                    mengaktifkan file unduhan.
+                    Tugas Anda sudah selesai dikerjakan! Bayar sisa{" "}
+                    <strong>{formatRupiah(sisa)}</strong> untuk mengaktifkan
+                    file unduhan.
                   </p>
-                  <div className="bg-white border border-cyan-200 rounded-xl p-4 text-center">
-                    <img
-                      src="/qris.png"
-                      alt="QRIS Pembayaran"
-                      className="mx-auto max-w-[220px] w-full rounded-lg"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display =
-                          "none";
-                        (
-                          e.currentTarget.nextElementSibling as HTMLElement
-                        ).style.display = "flex";
-                      }}
-                    />
-                    <div className="hidden flex-col items-center gap-2 py-4">
-                      <CreditCard className="w-10 h-10 text-slate-400" />
-                      <p className="text-sm text-slate-500">
-                        Scan QRIS untuk pelunasan {formatRupiah(sisa)}
-                      </p>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-2 font-medium">
-                      Scan QRIS untuk pelunasan {formatRupiah(sisa)}
-                    </p>
-                  </div>
-                  <UploadArea
-                    file={pelunasanFile}
-                    onFileChange={setPelunasanFile}
-                    hint="JPG atau PDF"
+                  <TombolBayar
+                    orderId={order.order_id}
+                    tipe="final"
+                    label="Bayar Pelunasan"
+                    nominal={sisa}
+                    onSuccess={() => refetch()}
                   />
-                  <Button
-                    className="w-full"
-                    disabled={!pelunasanFile || uploadingPelunasan}
-                    onClick={onUploadPelunasan}
-                  >
-                    {uploadingPelunasan ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Mengupload...
-                      </>
-                    ) : (
-                      "Kirim Bukti Pelunasan"
-                    )}
-                  </Button>
                 </CardContent>
               </Card>
             )}
 
-            {/* ── Menunggu Verifikasi Pelunasan ── */}
-            {order.status === "menunggu verifikasi" && (
-              <Alert className="bg-purple-50 border-purple-200">
-                <Loader2 className="h-4 w-4 text-purple-600 animate-spin" />
-                <AlertTitle className="text-purple-800">
-                  Pelunasan Sedang Diverifikasi
+            {/* ── Pelunasan Diterima ── */}
+            {order.status === "pelunasan diterima" && (
+              <Alert className="bg-teal-50 border-teal-200">
+                <Loader2 className="h-4 w-4 text-teal-600 animate-spin" />
+                <AlertTitle className="text-teal-800">
+                  Pelunasan Diterima
                 </AlertTitle>
-                <AlertDescription className="text-purple-700">
-                  Bukti pelunasan Anda sedang diverifikasi admin. File akan
-                  tersedia setelah disetujui.
+                <AlertDescription className="text-teal-700">
+                  Pembayaran pelunasan berhasil. File hasil tugas sedang
+                  disiapkan, sebentar lagi bisa diunduh.
                 </AlertDescription>
               </Alert>
             )}
@@ -909,9 +824,16 @@ export default function TrackPage() {
                   )}
                   <a
                     className="mt-3 block"
-                    href={`https://wa.me/6285875630641?text=${encodeURIComponent(
-                      `Halo kak, saya ${order.nama}, mau tanya tugas dengan nomor order ${order.order_id}. [Tulis pertanyaanmu di sini]`,
-                    )}`}
+                    href={
+                      "https://wa.me/6285875630641?text=" +
+                      encodeURIComponent(
+                        "Halo kak, saya " +
+                          order.nama +
+                          ", mau tanya tugas dengan nomor order " +
+                          order.order_id +
+                          ". [Tulis pertanyaanmu di sini]",
+                      )
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -932,7 +854,6 @@ export default function TrackPage() {
     </Layout>
   );
 }
-
 function Row({
   icon,
   label,
