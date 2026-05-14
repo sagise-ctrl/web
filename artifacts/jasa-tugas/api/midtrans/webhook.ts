@@ -23,7 +23,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .update(`${order_id}${status_code}${gross_amount}${MIDTRANS_SERVER_KEY}`)
     .digest("hex");
 
+  console.log("WEBHOOK BODY:", JSON.stringify(req.body));
+  console.log("EXPECTED SIG:", expectedSignature);
+  console.log("RECEIVED SIG:", signature_key);
+
   if (signature_key !== expectedSignature) {
+    console.log("SIGNATURE MISMATCH - returning 403");
     return res
       .status(403)
       .json({ success: false, message: "Signature tidak valid" });
@@ -35,28 +40,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     (transaction_status === "capture" && fraud_status === "accept");
 
   if (!isSuccess) {
-    // Bukan sukses (pending, deny, expire, cancel) — abaikan saja
+    console.log("BUKAN TRANSAKSI SUKSES:", transaction_status);
     return res
       .status(200)
       .json({ success: true, message: "Diabaikan: bukan transaksi sukses" });
   }
 
   // ─── 3. Parse order_id asli dan tipe pembayaran ────────────
-  // order_id dari Midtrans: "ORD-xxx-DP" atau "ORD-xxx-FINAL"
   let realOrderId: string;
   let tipe: "dp" | "final";
 
   if (order_id.endsWith("-DP")) {
-    realOrderId = order_id.slice(0, -3); // hapus "-DP"
+    realOrderId = order_id.slice(0, -3);
     tipe = "dp";
   } else if (order_id.endsWith("-FINAL")) {
-    realOrderId = order_id.slice(0, -6); // hapus "-FINAL"
+    realOrderId = order_id.slice(0, -6);
     tipe = "final";
   } else {
+    console.log("FORMAT ORDER_ID TIDAK DIKENAL:", order_id);
     return res
       .status(400)
       .json({ success: false, message: "Format order_id tidak dikenal" });
   }
+
+  console.log("REAL ORDER ID:", realOrderId, "TIPE:", tipe);
 
   // ─── 4. Update status order di GAS ────────────────────────
   try {
@@ -73,6 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const gasData = await gasRes.json();
+    console.log("GAS RESPONSE:", JSON.stringify(gasData));
 
     if (!gasData.success) {
       return res.status(500).json({
@@ -83,6 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ success: true });
   } catch (err: any) {
+    console.log("GAS ERROR:", err.message);
     return res.status(500).json({
       success: false,
       message: "Gagal menghubungi GAS: " + err.message,
