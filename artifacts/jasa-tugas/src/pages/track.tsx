@@ -195,8 +195,9 @@ function TombolBayar({
             title: "Pembayaran Berhasil!",
             description: "Status order sedang diperbarui...",
           });
-          // Polling refetch sampai status berubah
-          setTimeout(onSuccess, 3000);
+          setTimeout(() => {
+            window.location.reload();
+          }, 3000);
         },
         onPending: () => {
           toast({
