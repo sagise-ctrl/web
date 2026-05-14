@@ -48,20 +48,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Validasi status order sesuai tipe pembayaran
   if (tipe === "dp" && order.status !== "menunggu pembayaran dp") {
-    return res
-      .status(400)
-      .json({
-        success: false,
-        message: "Order tidak dalam status menunggu pembayaran dp",
-      });
+    return res.status(400).json({
+      success: false,
+      message: "Order tidak dalam status menunggu pembayaran dp",
+    });
   }
   if (tipe === "final" && order.status !== "menunggu pelunasan") {
-    return res
-      .status(400)
-      .json({
-        success: false,
-        message: "Order tidak dalam status menunggu pelunasan",
-      });
+    return res.status(400).json({
+      success: false,
+      message: "Order tidak dalam status menunggu pelunasan",
+    });
   }
 
   // Tentukan nominal dan order_id Midtrans
@@ -107,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const snapData = await snapRes.json();
-
+    console.log("MIDTRANS RESPONSE:", JSON.stringify(snapData));
     if (!snapData.token) {
       return res.status(500).json({
         success: false,
