@@ -8,6 +8,7 @@ import OrderPage from "@/pages/order";
 import TrackPage from "@/pages/track";
 import AdminPage from "@/pages/admin";
 import TermsPage from "@/pages/terms";
+import PaymentFinishPage from "@/pages/payment-finish";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/track" component={TrackPage} />
       <Route path="/admin" component={AdminPage} />
       <Route path="/terms" component={TermsPage} />
+      <Route path="/payment-finish" component={PaymentFinishPage} />
       <Route component={NotFound} />
     </Switch>
   );
