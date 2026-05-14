@@ -96,8 +96,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         ],
         callbacks: {
-          finish: `https://www.tugasly.my.id/payment-finish?order_id=${order_id}`,
-          error: `https://www.tugasly.my.id/payment-error?order_id=${order_id}`,
+          finish: `https://www.tugasly.my.id/track?id=${order_id}`,
+          error: `https://www.tugasly.my.id/track?id=${order_id}`,
         },
       }),
     });
