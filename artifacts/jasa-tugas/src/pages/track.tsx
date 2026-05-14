@@ -156,7 +156,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// ─── Tombol Bayar Midtrans ────────────────────────────────────
+// ─── Tombol Bayar Midtrans (QRIS) ────────────────────────────
 function TombolBayar({
   orderId,
   tipe,
@@ -172,11 +172,13 @@ function TombolBayar({
 }) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [expiry, setExpiry] = useState<string | null>(null);
+  const [polling, setPolling] = useState(false);
 
   async function handleBayar() {
     setLoading(true);
     try {
-      // 1. Minta token dari server
       const res = await fetch("/api/midtrans/create-transaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -184,41 +186,13 @@ function TombolBayar({
       });
       const data = await res.json();
 
-      if (!data.success || !data.token) {
-        throw new Error(data.message || "Gagal mendapat token pembayaran");
+      if (!data.success || !data.qr_url) {
+        throw new Error(data.message || "Gagal mendapat QR pembayaran");
       }
 
-      // 2. Buka Snap popup
-      window.snap.pay(data.token, {
-        onSuccess: () => {
-          toast({
-            title: "Pembayaran Berhasil!",
-            description: "Status order sedang diperbarui...",
-          });
-          setTimeout(() => {
-            window.location.reload();
-          }, 3000);
-        },
-        onPending: () => {
-          toast({
-            title: "Pembayaran Pending",
-            description: "Selesaikan pembayaran Anda.",
-          });
-        },
-        onError: () => {
-          toast({
-            variant: "destructive",
-            title: "Pembayaran Gagal",
-            description: "Silakan coba lagi.",
-          });
-        },
-        onClose: () => {
-          toast({
-            title: "Popup Ditutup",
-            description: "Pembayaran belum diselesaikan.",
-          });
-        },
-      });
+      setQrUrl(data.qr_url);
+      setExpiry(data.expiry);
+      setPolling(true);
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -228,6 +202,52 @@ function TombolBayar({
     } finally {
       setLoading(false);
     }
+  }
+
+  // Polling status setiap 5 detik setelah QR ditampilkan
+  useEffect(() => {
+    if (!polling) return;
+    const interval = setInterval(() => {
+      onSuccess(); // refetch order
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [polling]);
+
+  if (qrUrl) {
+    return (
+      <div className="flex flex-col items-center gap-3 p-4 border rounded-xl bg-white">
+        <p className="text-sm font-medium text-slate-700">
+          Scan QRIS untuk Membayar
+        </p>
+        <p className="text-lg font-bold text-primary">
+          {formatRupiah(nominal)}
+        </p>
+        <img
+          src={qrUrl}
+          alt="QR Code Pembayaran"
+          className="w-48 h-48 object-contain"
+        />
+        {expiry && (
+          <p className="text-xs text-slate-400">
+            Berlaku hingga: {new Date(expiry).toLocaleTimeString("id-ID")}
+          </p>
+        )}
+        <p className="text-xs text-slate-500 text-center">
+          Gunakan GoPay, OVO, Dana, atau aplikasi bank manapun
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            setQrUrl(null);
+            setPolling(false);
+          }}
+        >
+          Batal
+        </Button>
+      </div>
+    );
   }
 
   return (
