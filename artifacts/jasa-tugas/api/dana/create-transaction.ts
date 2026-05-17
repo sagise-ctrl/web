@@ -172,16 +172,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   debug.expiry = expiry;
 
   try {
-    const terminalId = process.env.DANA_TERMINAL_ID?.trim();
-    const origin = normalizeDanaOrigin(
-      process.env.DANA_ORIGIN || req.headers.origin || "",
-    );
+    const origin = normalizeDanaOrigin(req.headers.origin || process.env.DANA_ORIGIN || "");
     if (!origin) {
       throw new Error(
         "DANA origin tidak tersedia. Set DANA_ORIGIN atau kirim header Origin dari browser.",
       );
     }
 
+    const terminalId = process.env.DANA_TERMINAL_ID?.trim() || null;
     const body: Record<string, any> = {
       merchantId: requireEnv("DANA_MERCHANT_ID"),
       storeId: requireEnv("DANA_STORE_ID"),
@@ -193,6 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       validityPeriod: expiry,
       origin,
       channelId: process.env.DANA_CHANNEL_ID || "95221",
+      terminalId,
       additionalInfo: {
         terminalSource: "MER",
         envInfo: {
@@ -210,9 +209,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     };
 
-    if (terminalId) {
-      body.terminalId = terminalId;
-    }
     if (process.env.DANA_SUB_MERCHANT_ID) {
       body.subMerchantId = process.env.DANA_SUB_MERCHANT_ID;
     }
