@@ -116,13 +116,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err: any) {
     debug.error = { name: err.name, message: err.message };
     debug.duration_ms = Date.now() - startedAt;
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message: "Gagal ambil data order: " + err.message,
-        debug,
-      });
+    return res.status(500).json({
+      success: false,
+      message: "Gagal ambil data order: " + err.message,
+      debug,
+    });
   }
 
   debug.stage = "validating_order_status";
@@ -147,7 +145,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!Number.isFinite(amount) || amount <= 0) {
     return res
       .status(400)
-      .json({ success: false, message: "Nominal pembayaran tidak valid", debug });
+      .json({
+        success: false,
+        message: "Nominal pembayaran tidak valid",
+        debug,
+      });
   }
 
   let partnerReferenceNo: string;
@@ -159,7 +161,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err: any) {
     debug.error = { name: err.name, message: err.message };
     debug.duration_ms = Date.now() - startedAt;
-    return res.status(400).json({ success: false, message: err.message, debug });
+    return res
+      .status(400)
+      .json({ success: false, message: err.message, debug });
   }
 
   debug.stage = "building_dana_payload";
@@ -172,14 +176,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   debug.expiry = expiry;
 
   try {
-    const origin = normalizeDanaOrigin(req.headers.origin || process.env.DANA_ORIGIN || "");
+    const origin = normalizeDanaOrigin(
+      req.headers.origin || process.env.DANA_ORIGIN || "",
+    );
     if (!origin) {
       throw new Error(
         "DANA origin tidak tersedia. Set DANA_ORIGIN atau kirim header Origin dari browser.",
       );
     }
 
-    const terminalId = process.env.DANA_TERMINAL_ID?.trim() || null;
+    const terminalId = process.env.DANA_TERMINAL_ID?.trim();
     const body: Record<string, any> = {
       merchantId: requireEnv("DANA_MERCHANT_ID"),
       storeId: requireEnv("DANA_STORE_ID"),
@@ -189,9 +195,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         currency: "IDR",
       },
       validityPeriod: expiry,
-      origin,
-      channelId: process.env.DANA_CHANNEL_ID || "95221",
-      terminalId,
       additionalInfo: {
         terminalSource: "MER",
         envInfo: {
@@ -209,6 +212,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     };
 
+    if (terminalId) {
+      body.terminalId = terminalId;
+    }
     if (process.env.DANA_SUB_MERCHANT_ID) {
       body.subMerchantId = process.env.DANA_SUB_MERCHANT_ID;
     }
@@ -226,7 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       amount: body.amount,
       validityPeriod: body.validityPeriod,
       origin,
-      channelId: body.channelId,
+      channelId: process.env.DANA_CHANNEL_ID || "95221",
     };
     debug.danaRequestBody = body;
     const danaStartedAt = Date.now();
