@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import * as crypto from "crypto";
 
 export const DANA_QRIS_PATH = "/v1.0/qr/qr-mpm-generate.htm";
 export const DANA_NOTIFY_PATH = "/v1.0/debit/notify";
@@ -127,6 +127,43 @@ export function signDanaRequest(
       "DANA_PRIVATE_KEY tidak bisa dibaca sebagai RSA private key. Pastikan value berisi PEM lengkap BEGIN/END PRIVATE KEY atau base64 PKCS#8. Detail: " +
         err.message,
     );
+  }
+}
+
+export function getDanaPrivateKeyDebug() {
+  const privateKey = process.env.DANA_PRIVATE_KEY;
+  if (!privateKey) {
+    return { ok: false, error: "DANA_PRIVATE_KEY belum diset" };
+  }
+
+  const normalized = normalizePem(privateKey);
+  const format = normalized.includes("-----BEGIN RSA PRIVATE KEY-----")
+    ? "PKCS#1"
+    : normalized.includes("-----BEGIN PRIVATE KEY-----")
+    ? "PKCS#8"
+    : normalized.includes("-----BEGIN ENCRYPTED PRIVATE KEY-----")
+    ? "PKCS#8-encrypted"
+    : "unknown";
+
+  try {
+    const keyObj = crypto.createPrivateKey({ key: normalized, format: "pem" });
+    const publicKeyPem = keyObj
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    const details = keyObj.asymmetricKeyDetails as { modulusLength?: number } | undefined;
+    return {
+      ok: true,
+      format,
+      type: keyObj.asymmetricKeyType,
+      size: details?.modulusLength ?? null,
+      publicKeyPem,
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      format,
+      error: err.message,
+    };
   }
 }
 

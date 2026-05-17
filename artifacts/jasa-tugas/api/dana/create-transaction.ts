@@ -10,6 +10,7 @@ import {
   signDanaRequest,
   danaStringToSign,
   minifyBody,
+  getDanaPrivateKeyDebug,
 } from "./_utils";
 
 function requireEnv(name: string) {
@@ -238,6 +239,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     debug.stage = "signing_dana_request";
     // Use a single deterministic stringified body for both signing and request
     const bodyString = minifyBody(body);
+    // Validate and inspect the private key used for signing.
+    debug.danaPrivateKey = getDanaPrivateKeyDebug();
     // Build exact string-to-sign for debug and verification
     const stringToSign = danaStringToSign("POST", DANA_QRIS_PATH, bodyString, timestamp);
     const signature = signDanaRequest("POST", DANA_QRIS_PATH, bodyString, timestamp);
