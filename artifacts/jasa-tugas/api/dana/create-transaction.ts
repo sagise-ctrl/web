@@ -191,6 +191,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         currency: "IDR",
       },
       validityPeriod: expiry,
+      origin,
+      channelId: process.env.DANA_CHANNEL_ID || "95221",
       additionalInfo: {
         terminalSource: "MER",
         envInfo: {
@@ -228,8 +230,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       amount: body.amount,
       validityPeriod: body.validityPeriod,
       origin,
-      channelId: process.env.DANA_CHANNEL_ID || "95221",
+      channelId: body.channelId,
     };
+    debug.danaRequestBody = body;
     const danaStartedAt = Date.now();
     const danaRes = await fetch(`${danaBaseUrl()}${DANA_QRIS_PATH}`, {
       method: "POST",
