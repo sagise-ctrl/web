@@ -205,7 +205,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       validityPeriod: expiry,
       origin,
-      channelId: process.env.DANA_CHANNEL_ID || "95221",
       additionalInfo: {
         terminalSource: "MER",
         envInfo: {
@@ -242,8 +241,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Validate and inspect the private key used for signing.
     debug.danaPrivateKey = getDanaPrivateKeyDebug();
     // Build exact string-to-sign for debug and verification
-    const stringToSign = danaStringToSign("POST", DANA_QRIS_PATH, bodyString, timestamp);
-    const signature = signDanaRequest("POST", DANA_QRIS_PATH, bodyString, timestamp);
+    const stringToSign = danaStringToSign(
+      "POST",
+      DANA_QRIS_PATH,
+      bodyString,
+      timestamp,
+    );
+    const signature = signDanaRequest(
+      "POST",
+      DANA_QRIS_PATH,
+      bodyString,
+      timestamp,
+    );
     debug.stringToSign = stringToSign;
     debug.signature = signature;
     console.log("DANA STRING TO SIGN:", stringToSign);
@@ -274,7 +283,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "X-PARTNER-ID": requireEnv("DANA_PARTNER_ID"),
         "X-EXTERNAL-ID": makeExternalId("QR"),
         "CHANNEL-ID": process.env.DANA_CHANNEL_ID || "95221",
-        "CHANNEL_ID": process.env.DANA_CHANNEL_ID || "95221",
       },
       body: bodyString,
     });
