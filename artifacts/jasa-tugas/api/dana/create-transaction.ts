@@ -143,13 +143,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const amount = tipe === "dp" ? Number(order.dp) : Number(order.sisa_bayar);
   debug.amount = amount;
   if (!Number.isFinite(amount) || amount <= 0) {
-    return res
-      .status(400)
-      .json({
-        success: false,
-        message: "Nominal pembayaran tidak valid",
-        debug,
-      });
+    return res.status(400).json({
+      success: false,
+      message: "Nominal pembayaran tidak valid",
+      debug,
+    });
   }
 
   let partnerReferenceNo: string;
@@ -195,6 +193,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         currency: "IDR",
       },
       validityPeriod: expiry,
+      origin,
+      channelId: process.env.DANA_CHANNEL_ID || "95221",
       additionalInfo: {
         terminalSource: "MER",
         envInfo: {
