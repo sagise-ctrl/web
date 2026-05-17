@@ -61,7 +61,37 @@ export function normalizePem(value: string) {
 }
 
 export function minifyBody(body: unknown) {
-  return JSON.stringify(body ?? {});
+  // Deterministic JSON stringify: sort object keys recursively.
+  function stableStringify(value: any): string {
+    if (value === null) return "null";
+    const t = typeof value;
+    if (t === "string" || t === "number" || t === "boolean") {
+      return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+      return (
+        "[" +
+        value
+          .map((v) => (v === undefined ? "null" : stableStringify(v)))
+          .join(",") +
+        "]"
+      );
+    }
+    if (t === "object") {
+      const keys = Object.keys(value).filter((k) => value[k] !== undefined).sort();
+      return (
+        "{" +
+        keys
+          .map((k) => JSON.stringify(k) + ":" + stableStringify(value[k]))
+          .join(",") +
+        "}"
+      );
+    }
+    // fallback (functions, undefined, symbols) — stringify as null
+    return "null";
+  }
+
+  return stableStringify(body ?? {});
 }
 
 export function sha256Hex(value: string) {
@@ -71,21 +101,17 @@ export function sha256Hex(value: string) {
 export function danaStringToSign(
   method: string,
   path: string,
-  body: unknown,
+  body: unknown | string,
   timestamp: string,
 ) {
-  return [
-    method.toUpperCase(),
-    path,
-    sha256Hex(minifyBody(body)),
-    timestamp,
-  ].join(":");
+  const bodyString = typeof body === "string" ? body : minifyBody(body);
+  return [method.toUpperCase(), path, sha256Hex(bodyString), timestamp].join(":");
 }
 
 export function signDanaRequest(
   method: string,
   path: string,
-  body: unknown,
+  body: unknown | string,
   timestamp: string,
 ) {
   const privateKey = process.env.DANA_PRIVATE_KEY;

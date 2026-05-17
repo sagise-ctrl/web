@@ -8,6 +8,7 @@ import {
   makePartnerReferenceNo,
   moneyValue,
   signDanaRequest,
+  minifyBody,
 } from "./_utils";
 
 function requireEnv(name: string) {
@@ -228,7 +229,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     debug.stage = "signing_dana_request";
-    const signature = signDanaRequest("POST", DANA_QRIS_PATH, body, timestamp);
+    // Use a single deterministic stringified body for both signing and request
+    const bodyString = minifyBody(body);
+    const signature = signDanaRequest("POST", DANA_QRIS_PATH, bodyString, timestamp);
     debug.stage = "calling_dana_qris";
     debug.danaRequest = {
       url: `${danaBaseUrl()}${DANA_QRIS_PATH}`,
@@ -243,6 +246,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       channelId: process.env.DANA_CHANNEL_ID || "95221",
     };
     debug.danaRequestBody = body;
+    debug.danaRequestBodyString = bodyString;
     const danaStartedAt = Date.now();
     const danaRes = await fetch(`${danaBaseUrl()}${DANA_QRIS_PATH}`, {
       method: "POST",
@@ -250,12 +254,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "Content-Type": "application/json",
         "X-TIMESTAMP": timestamp,
         "X-SIGNATURE": signature,
-        ORIGIN: origin,
+        Origin: origin,
         "X-PARTNER-ID": requireEnv("DANA_PARTNER_ID"),
         "X-EXTERNAL-ID": makeExternalId("QR"),
         "CHANNEL-ID": process.env.DANA_CHANNEL_ID || "95221",
       },
-      body: JSON.stringify(body),
+      body: bodyString,
     });
 
     const responseText = await danaRes.text();
