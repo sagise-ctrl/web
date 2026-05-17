@@ -189,7 +189,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const terminalId = process.env.DANA_TERMINAL_ID?.trim();
     const body: Record<string, any> = {
       merchantId: requireEnv("DANA_MERCHANT_ID"),
-      storeId: requireEnv("DANA_STORE_ID"),
       partnerReferenceNo,
       amount: {
         value: moneyValue(amount),
@@ -214,6 +213,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       },
     };
+
+    // Include storeId only when explicitly set in env. Avoid sending merchantId as storeId by default.
+    const storeId = process.env.DANA_STORE_ID?.trim();
+    if (storeId) {
+      body.storeId = storeId;
+    }
 
     if (terminalId) {
       body.terminalId = terminalId;
