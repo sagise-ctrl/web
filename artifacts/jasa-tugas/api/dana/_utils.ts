@@ -33,31 +33,47 @@ export function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60 * 1000);
 }
 
-export function normalizePem(value: string) {
+function stripQuotesAndNormalizeNewlines(value: string) {
   let pem = value.trim();
-  if (
-    (pem.startsWith('"') && pem.endsWith('"')) ||
-    (pem.startsWith("'") && pem.endsWith("'"))
-  ) {
+  if ((pem.startsWith('"') && pem.endsWith('"')) || (pem.startsWith("'") && pem.endsWith("'"))) {
     pem = pem.slice(1, -1).trim();
   }
+  return pem.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
+}
 
-  pem = pem.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
+export function normalizePrivateKeyPem(value: string) {
+  const pem = stripQuotesAndNormalizeNewlines(value);
+  const headerMatch = pem.match(/-----BEGIN [A-Z ]+-----/);
+  const footerMatch = pem.match(/-----END [A-Z ]+-----/);
 
+  if (headerMatch && footerMatch) {
+    // already PEM — ensure proper wrapping/line lengths
+    const header = headerMatch[0];
+    const footer = footerMatch[0];
+    const body = pem.slice((headerMatch.index ?? 0) + header.length, footerMatch.index).replace(/\s+/g, "");
+    return `${header}\n${body.match(/.{1,64}/g)?.join("\n") || body}\n${footer}\n`;
+  }
+
+  // assume raw base64 private key (PKCS#8). Wrap with PRIVATE KEY header
+  const body = pem.replace(/\s+/g, "");
+  return `-----BEGIN PRIVATE KEY-----\n${body.match(/.{1,64}/g)?.join("\n") || body}\n-----END PRIVATE KEY-----\n`;
+}
+
+export function normalizePublicKeyPem(value: string) {
+  const pem = stripQuotesAndNormalizeNewlines(value);
   const headerMatch = pem.match(/-----BEGIN [A-Z ]+-----/);
   const footerMatch = pem.match(/-----END [A-Z ]+-----/);
 
   if (headerMatch && footerMatch) {
     const header = headerMatch[0];
     const footer = footerMatch[0];
-    const body = pem
-      .slice((headerMatch.index ?? 0) + header.length, footerMatch.index)
-      .replace(/\s+/g, "");
+    const body = pem.slice((headerMatch.index ?? 0) + header.length, footerMatch.index).replace(/\s+/g, "");
     return `${header}\n${body.match(/.{1,64}/g)?.join("\n") || body}\n${footer}\n`;
   }
 
+  // assume raw base64 public key. Wrap with PUBLIC KEY header
   const body = pem.replace(/\s+/g, "");
-  return `-----BEGIN PRIVATE KEY-----\n${body.match(/.{1,64}/g)?.join("\n") || body}\n-----END PRIVATE KEY-----\n`;
+  return `-----BEGIN PUBLIC KEY-----\n${body.match(/.{1,64}/g)?.join("\n") || body}\n-----END PUBLIC KEY-----\n`;
 }
 
 export function minifyBody(body: unknown) {
@@ -121,7 +137,7 @@ export function signDanaRequest(
   signer.update(danaStringToSign(method, path, body, timestamp));
   signer.end();
   try {
-    return signer.sign(normalizePem(privateKey), "base64");
+  return signer.sign(normalizePrivateKeyPem(privateKey), "base64");
   } catch (err: any) {
     throw new Error(
       "DANA_PRIVATE_KEY tidak bisa dibaca sebagai RSA private key. Pastikan value berisi PEM lengkap BEGIN/END PRIVATE KEY atau base64 PKCS#8. Detail: " +
@@ -131,12 +147,13 @@ export function signDanaRequest(
 }
 
 export function getDanaPrivateKeyDebug() {
-  const privateKey = process.env.DANA_PRIVATE_KEY;
-  if (!privateKey) {
+  const rawValue = process.env.DANA_PRIVATE_KEY;
+  if (!rawValue) {
     return { ok: false, error: "DANA_PRIVATE_KEY belum diset" };
   }
 
-  const normalized = normalizePem(privateKey);
+  const rawPrefix = rawValue.slice(0, 20);
+  const normalized = normalizePrivateKeyPem(rawValue);
   const format = normalized.includes("-----BEGIN RSA PRIVATE KEY-----")
     ? "PKCS#1"
     : normalized.includes("-----BEGIN PRIVATE KEY-----")
@@ -145,24 +162,79 @@ export function getDanaPrivateKeyDebug() {
     ? "PKCS#8-encrypted"
     : "unknown";
 
+  const attempts: Array<{
+    attempt: number;
+    approach: string;
+    success: boolean;
+    error?: string;
+  }> = [];
+
+  const tryCreate = (options: any, approach: string) => {
+    try {
+      const keyObj = crypto.createPrivateKey(options);
+      attempts.push({ attempt: attempts.length + 1, approach, success: true });
+      return keyObj;
+    } catch (err: any) {
+      attempts.push({
+        attempt: attempts.length + 1,
+        approach,
+        success: false,
+        error: err.message,
+      });
+      return null;
+    }
+  };
+
+  let keyObj = tryCreate({ key: normalized, format: "pem" }, "pem");
+
+  if (!keyObj) {
+    const rawBase64 = stripQuotesAndNormalizeNewlines(rawValue).replace(/\s+/g, "");
+    keyObj = tryCreate(
+      { key: Buffer.from(rawBase64, "base64"), format: "der", type: "pkcs8" },
+      "der-pkcs8",
+    );
+  }
+
+  if (!keyObj) {
+    const rawBase64 = stripQuotesAndNormalizeNewlines(rawValue).replace(/\s+/g, "");
+    keyObj = tryCreate(
+      { key: Buffer.from(rawBase64, "base64"), format: "der", type: "pkcs1" },
+      "der-pkcs1",
+    );
+  }
+
+  if (!keyObj) {
+    return {
+      ok: false,
+      format,
+      rawPrefix,
+      attempts,
+      error: "Unable to parse DANA_PRIVATE_KEY with any supported format",
+    };
+  }
+
   try {
-    const keyObj = crypto.createPrivateKey({ key: normalized, format: "pem" });
-    const publicKeyPem = keyObj
-      .export({ type: "spki", format: "pem" })
-      .toString();
+    const publicKeyPem = keyObj.export({ type: "spki", format: "pem" }).toString();
     const details = keyObj.asymmetricKeyDetails as { modulusLength?: number } | undefined;
     return {
       ok: true,
       format,
+      rawPrefix,
+      attempts,
       type: keyObj.asymmetricKeyType,
       size: details?.modulusLength ?? null,
       publicKeyPem,
     };
   } catch (err: any) {
     return {
-      ok: false,
+      ok: true,
       format,
-      error: err.message,
+      rawPrefix,
+      attempts,
+      type: keyObj.asymmetricKeyType,
+      size: null,
+      publicKeyPem: null,
+      publicKeyError: err.message,
     };
   }
 }
@@ -181,7 +253,7 @@ export function verifyDanaSignature(
   verifier.update(danaStringToSign(method, path, body, timestamp));
   verifier.end();
   try {
-    return verifier.verify(normalizePem(publicKey), signature, "base64");
+  return verifier.verify(normalizePublicKeyPem(publicKey), signature, "base64");
   } catch (err: any) {
     throw new Error(
       "DANA_PUBLIC_KEY tidak bisa dibaca sebagai RSA public key. Pastikan value berisi PEM lengkap BEGIN/END PUBLIC KEY. Detail: " +
