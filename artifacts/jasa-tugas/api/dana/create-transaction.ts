@@ -174,9 +174,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   debug.expiry = expiry;
 
   try {
+    const originSource = process.env.DANA_ORIGIN ? "env" : "header";
     const origin = normalizeDanaOrigin(
-      req.headers.origin || process.env.DANA_ORIGIN || "",
+      process.env.DANA_ORIGIN || req.headers.origin || "",
     );
+    debug.originSource = originSource;
     if (!origin) {
       throw new Error(
         "DANA origin tidak tersedia. Set DANA_ORIGIN atau kirim header Origin dari browser.",
