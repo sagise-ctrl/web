@@ -26,16 +26,16 @@ function normalizeDanaOrigin(origin: unknown) {
   if (typeof origin !== "string") return "";
   const trimmed = origin.trim();
   if (!trimmed) return "";
+
   try {
-    // DANA docs describe ORIGIN as a domain (e.g. www.hostname.com).
-    // Browser Origin header includes scheme; strip it to host.
     if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-      return new URL(trimmed).host;
+      return new URL(trimmed).origin;
     }
+    // If caller provided only hostname/domain, assume HTTPS.
+    return new URL(`https://${trimmed}`).origin;
   } catch {
-    // fall through
+    return "";
   }
-  return trimmed;
 }
 
 function danaErrorMessage(data: any) {
@@ -175,13 +175,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const originSource = process.env.DANA_ORIGIN ? "env" : "header";
-    const origin = normalizeDanaOrigin(
-      process.env.DANA_ORIGIN || req.headers.origin || "",
-    );
+    const originRaw = process.env.DANA_ORIGIN || req.headers.origin || "";
+    const origin = normalizeDanaOrigin(originRaw);
     debug.originSource = originSource;
+    debug.originRaw = originRaw;
+    debug.origin = origin;
     if (!origin) {
       throw new Error(
-        "DANA origin tidak tersedia. Set DANA_ORIGIN atau kirim header Origin dari browser.",
+        "DANA origin tidak tersedia atau formatnya salah. Set DANA_ORIGIN sebagai URL penuh (contoh: https://yourdomain.com) atau kirim header Origin dari browser.",
       );
     }
 

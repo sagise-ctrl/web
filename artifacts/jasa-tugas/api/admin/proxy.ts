@@ -6,14 +6,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cookies = parse(req.headers.cookie ?? "");
   const token = cookies.admin_token;
 
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-  try {
-    jwt.verify(token, process.env.JWT_SECRET!);
-  } catch {
+  if (!token) {
     return res
       .status(401)
-      .json({ error: "Session expired, silakan login ulang" });
+      .json({
+        error: "Unauthorized",
+        message: "Session tidak valid, silakan login terlebih dahulu",
+      });
+  }
+
+  if (!process.env.JWT_SECRET) {
+    console.error("JWT_SECRET not configured");
+    return res
+      .status(500)
+      .json({
+        error: "Server error",
+        message: "JWT_SECRET tidak dikonfigurasi di server",
+      });
+  }
+
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err: any) {
+    return res.status(401).json({
+      error: "Session expired",
+      message: "Session expired, silakan login ulang",
+      detail: err.message,
+    });
   }
 
   const GAS_URL = process.env.GAS_URL;
