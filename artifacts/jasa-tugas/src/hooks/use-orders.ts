@@ -34,7 +34,6 @@ export interface Order {
   revisi_count?: number;
   estimasi_selesai?: string;
   estimasi_revisi?: string;
-  snap_token?: string;
   payment_dp_id?: string;
   payment_final_id?: string;
 }

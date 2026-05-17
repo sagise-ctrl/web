@@ -1,17 +1,14 @@
 // ============================================================
-// JASA TUGAS - Google Apps Script Backend (v7)
+// JASA TUGAS - Google Apps Script Backend (v8)
 // ============================================================
 // ALUR STATUS:
-// verifikasi tugas → pembayaran awal → verifikasi pembayaran awal
-// → proses pengerjaan → menunggu pelunasan (admin upload hasil)
-// → menunggu verifikasi (customer upload bukti pelunasan)
-// → cek file (admin verifikasi) → customer pilih Selesai atau Revisi
-// → revisi → admin upload hasil revisi → cek file (lagi)
-// → customer konfirmasi selesai → selesai
-//
-// Upload "hasil" saat status apapun → cek file
-// Upload "bukti_dp"         → verifikasi pembayaran awal
-// Upload "bukti_pelunasan"  → menunggu verifikasi
+// verifikasi tugas
+// → menunggu pembayaran dp (admin approve)
+// → proses pengerjaan (webhook Midtrans: DP paid)
+// → menunggu pelunasan (admin upload hasil)
+// → pelunasan diterima (webhook Midtrans: pelunasan paid)
+// → cek file (otomatis)
+// → revisi / selesai (customer konfirmasi)
 // ============================================================
 
 const SPREADSHEET_ID = "1M46VQj9eGn4_Pn_bg0u4IAcuqnaAekEAHo-yeVXV9Eo";
@@ -31,33 +28,32 @@ const COLUMNS = {
   DP: 11,
   SISA_BAYAR: 12,
   FILE_TUGAS_URL: 13,
-  BUKTI_DP_URL: 14,
-  BUKTI_PELUNASAN_URL: 15,
-  HASIL_URL: 16,
-  CREATED_AT: 17,
-  REVISI_CATATAN: 18,
-  REVISI_FILE_URLS: 19,
-  REVISI_COUNT: 20,
-  ESTIMASI_SELESAI: 21,
-  ESTIMASI_REVISI: 22,
+  HASIL_URL: 14,
+  CREATED_AT: 15,
+  REVISI_CATATAN: 16,
+  REVISI_FILE_URLS: 17,
+  REVISI_COUNT: 18,
+  ESTIMASI_SELESAI: 19,
+  ESTIMASI_REVISI: 20,
+  SNAP_TOKEN: 21,
+  PAYMENT_DP_ID: 22,
+  PAYMENT_FINAL_ID: 23,
 };
 
 const VALID_STATUSES = [
   "verifikasi tugas",
-  "pembayaran awal",
-  "verifikasi pembayaran awal",
+  "menunggu pembayaran dp",
   "proses pengerjaan",
   "menunggu pelunasan",
-  "menunggu verifikasi",
+  "pelunasan diterima",
   "cek file",
   "revisi",
   "selesai",
-  "pending",
-  "proses",
 ];
 
 const VALID_JENIS = ["Makalah", "PPT", "Artikel", "Tugas Harian"];
 
+// ─── Sheet ────────────────────────────────────────────────────
 function getSheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
@@ -77,8 +73,6 @@ function getSheet() {
       "dp",
       "sisa_bayar",
       "file_tugas_url",
-      "bukti_dp_url",
-      "bukti_pelunasan_url",
       "hasil_url",
       "created_at",
       "revisi_catatan",
@@ -86,8 +80,11 @@ function getSheet() {
       "revisi_count",
       "estimasi_selesai",
       "estimasi_revisi",
+      "snap_token",
+      "payment_dp_id",
+      "payment_final_id",
     ]);
-    sheet.getRange(1, 1, 1, 22).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 23).setFontWeight("bold");
   }
   return sheet;
 }
@@ -111,15 +108,16 @@ function rowToObject(row) {
     dp: row[10],
     sisa_bayar: row[11],
     file_tugas_url: row[12],
-    bukti_dp_url: row[13],
-    bukti_pelunasan_url: row[14],
-    hasil_url: row[15],
-    created_at: row[16],
-    revisi_catatan: row[17],
-    revisi_file_urls: row[18],
-    revisi_count: row[19] || 0,
-    estimasi_selesai: row[20] || "",
-    estimasi_revisi: row[21] || "",
+    hasil_url: row[13],
+    created_at: row[14],
+    revisi_catatan: row[15],
+    revisi_file_urls: row[16],
+    revisi_count: row[17] || 0,
+    estimasi_selesai: row[18] || "",
+    estimasi_revisi: row[19] || "",
+    snap_token: row[20] || "",
+    payment_dp_id: row[21] || "",
+    payment_final_id: row[22] || "",
   };
 }
 
@@ -162,12 +160,17 @@ function doPost(e) {
         body.estimasi_revisi,
       );
     if (body.action === "markSelesai") return handleMarkSelesai(body.order_id);
+    if (body.action === "updatePayment")
+      return handleUpdatePayment(body.order_id, body.tipe, body.transaction_id);
+    if (body.action === "saveSnapToken")
+      return handleSaveSnapToken(body.order_id, body.snap_token);
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
     return jsonResponse({ success: false, message: err.message });
   }
 }
 
+// ─── Check WA ─────────────────────────────────────────────────
 function handleCheckWa(wa) {
   if (!wa) return jsonResponse({ success: false, message: "WA diperlukan" });
   const sheet = getSheet();
@@ -183,6 +186,7 @@ function handleCheckWa(wa) {
   return jsonResponse({ success: true, data: { exists: false } });
 }
 
+// ─── Create Order ─────────────────────────────────────────────
 function handleCreateOrder(data) {
   if (!data.nama || !data.wa || !data.jenis || !data.halaman) {
     return jsonResponse({ success: false, message: "Data tidak lengkap" });
@@ -192,8 +196,10 @@ function handleCreateOrder(data) {
   }
   const sheet = getSheet();
   const order_id = generateOrderId();
-  const dp = 10000;
   const harga = Number(data.harga) || 0;
+  const dp = Math.ceil(harga * 0.33);
+  const sisa_bayar = harga - dp;
+
   sheet.appendRow([
     order_id,
     data.nama,
@@ -206,9 +212,7 @@ function handleCreateOrder(data) {
     data.tipe_order || "standar",
     harga,
     dp,
-    Math.max(0, harga - dp),
-    "",
-    "",
+    sisa_bayar,
     "",
     "",
     new Date().toISOString(),
@@ -217,10 +221,14 @@ function handleCreateOrder(data) {
     0,
     "",
     "",
+    "",
+    "",
+    "",
   ]);
   return jsonResponse({ success: true, order_id });
 }
 
+// ─── Get Order ────────────────────────────────────────────────
 function handleGetOrder(order_id) {
   if (!order_id)
     return jsonResponse({ success: false, message: "order_id diperlukan" });
@@ -233,6 +241,7 @@ function handleGetOrder(order_id) {
   return jsonResponse({ success: false, message: "Order tidak ditemukan" });
 }
 
+// ─── Get All Orders ───────────────────────────────────────────
 function handleGetAllOrders() {
   const sheet = getSheet();
   const data = sheet.getDataRange().getValues();
@@ -247,6 +256,7 @@ function handleGetAllOrders() {
   return jsonResponse({ success: true, data: orders });
 }
 
+// ─── Update Status (admin) ────────────────────────────────────
 function handleUpdateStatus(order_id, status, estimasi_selesai) {
   if (!order_id || !status)
     return jsonResponse({ success: false, message: "Parameter kurang" });
@@ -271,26 +281,78 @@ function handleUpdateStatus(order_id, status, estimasi_selesai) {
   return jsonResponse({ success: false, message: "Order tidak ditemukan" });
 }
 
-// ─── Upload file ──────────────────────────────────────────────
-// bukti_dp         → verifikasi pembayaran awal
-// bukti_pelunasan  → menunggu verifikasi
-// file_tugas       → tidak ubah status
-// hasil            → cek file (selalu, baik pengerjaan pertama maupun revisi)
+// ─── Update Payment (dipanggil webhook Midtrans) ──────────────
+// tipe: "dp" atau "final"
+function handleUpdatePayment(order_id, tipe, transaction_id) {
+  if (!order_id || !tipe)
+    return jsonResponse({ success: false, message: "Parameter kurang" });
+  const sheet = getSheet();
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === order_id) {
+      const currentStatus = data[i][7];
+
+      if (tipe === "dp") {
+        // Pastikan status saat ini memang menunggu DP
+        if (currentStatus !== "menunggu pembayaran dp") {
+          return jsonResponse({
+            success: false,
+            message: "Status order tidak sesuai untuk pembayaran DP",
+          });
+        }
+        sheet.getRange(i + 1, COLUMNS.STATUS).setValue("proses pengerjaan");
+        sheet
+          .getRange(i + 1, COLUMNS.PAYMENT_DP_ID)
+          .setValue(transaction_id || "");
+        sheet.getRange(i + 1, COLUMNS.SNAP_TOKEN).setValue(""); // clear token
+      } else if (tipe === "final") {
+        // Pastikan status saat ini memang menunggu pelunasan
+        if (currentStatus !== "menunggu pelunasan") {
+          return jsonResponse({
+            success: false,
+            message: "Status order tidak sesuai untuk pelunasan",
+          });
+        }
+        sheet.getRange(i + 1, COLUMNS.STATUS).setValue("cek file");
+        sheet
+          .getRange(i + 1, COLUMNS.PAYMENT_FINAL_ID)
+          .setValue(transaction_id || "");
+        sheet.getRange(i + 1, COLUMNS.SNAP_TOKEN).setValue(""); // clear token
+      }
+
+      return jsonResponse({ success: true });
+    }
+  }
+  return jsonResponse({ success: false, message: "Order tidak ditemukan" });
+}
+
+// ─── Save Snap Token ──────────────────────────────────────────
+function handleSaveSnapToken(order_id, snap_token) {
+  if (!order_id || !snap_token)
+    return jsonResponse({ success: false, message: "Parameter kurang" });
+  const sheet = getSheet();
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === order_id) {
+      sheet.getRange(i + 1, COLUMNS.SNAP_TOKEN).setValue(snap_token);
+      return jsonResponse({ success: true });
+    }
+  }
+  return jsonResponse({ success: false, message: "Order tidak ditemukan" });
+}
+
+// ─── Upload File ──────────────────────────────────────────────
+// file_tugas → tidak ubah status
+// hasil      → menunggu pelunasan (admin upload hasil)
+// hasil_revisi → cek file
 function handleUploadFile(order_id, tipe, fileBase64, fileName) {
   if (!order_id || !tipe || !fileBase64 || !fileName) {
     return jsonResponse({ success: false, message: "Parameter tidak lengkap" });
   }
-  const VALID_TIPE = ["bukti_dp", "bukti_pelunasan", "file_tugas", "hasil"];
+  const VALID_TIPE = ["file_tugas", "hasil"];
   if (!VALID_TIPE.includes(tipe)) {
     return jsonResponse({ success: false, message: "Tipe tidak valid" });
   }
-
-  const COLUMN_MAP = {
-    file_tugas: COLUMNS.FILE_TUGAS_URL,
-    bukti_dp: COLUMNS.BUKTI_DP_URL,
-    bukti_pelunasan: COLUMNS.BUKTI_PELUNASAN_URL,
-    hasil: COLUMNS.HASIL_URL,
-  };
 
   try {
     const folder = DriveApp.getRootFolder();
@@ -308,20 +370,22 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
     const data = sheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === order_id) {
-        sheet.getRange(i + 1, COLUMN_MAP[tipe]).setValue(fileUrl);
-
-        if (tipe === "bukti_dp") {
-          sheet
-            .getRange(i + 1, COLUMNS.STATUS)
-            .setValue("verifikasi pembayaran awal");
-        } else if (tipe === "bukti_pelunasan") {
-          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("menunggu verifikasi");
+        if (tipe === "file_tugas") {
+          sheet.getRange(i + 1, COLUMNS.FILE_TUGAS_URL).setValue(fileUrl);
+          // tidak ubah status
         } else if (tipe === "hasil") {
-          // Selalu ke "cek file" — customer download & konfirmasi dulu
-          // Admin upload hasil revisi pun tetap ke cek file, bukan langsung selesai
-          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("cek file");
+          sheet.getRange(i + 1, COLUMNS.HASIL_URL).setValue(fileUrl);
+          const currentStatus = data[i][7];
+          if (currentStatus === "proses pengerjaan") {
+            // Hasil pertama → minta pelunasan
+            sheet
+              .getRange(i + 1, COLUMNS.STATUS)
+              .setValue("menunggu pelunasan");
+          } else if (currentStatus === "revisi") {
+            // Hasil revisi → langsung cek file
+            sheet.getRange(i + 1, COLUMNS.STATUS).setValue("cek file");
+          }
         }
-        // file_tugas: tidak ubah status
 
         return jsonResponse({ success: true, url: fileUrl });
       }
@@ -335,7 +399,7 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
   }
 }
 
-// ─── Submit revisi (customer) ─────────────────────────────────
+// ─── Submit Revisi ────────────────────────────────────────────
 function handleSubmitRevisi(order_id, catatan, files, estimasi_revisi) {
   if (!order_id)
     return jsonResponse({ success: false, message: "order_id diperlukan" });
@@ -343,7 +407,7 @@ function handleSubmitRevisi(order_id, catatan, files, estimasi_revisi) {
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === order_id) {
-      const revisiCount = Number(data[i][19]) || 0;
+      const revisiCount = Number(data[i][17]) || 0;
       if (revisiCount >= 1) {
         return jsonResponse({
           success: false,
@@ -393,7 +457,7 @@ function handleSubmitRevisi(order_id, catatan, files, estimasi_revisi) {
   return jsonResponse({ success: false, message: "Order tidak ditemukan" });
 }
 
-// ─── Customer konfirmasi selesai ──────────────────────────────
+// ─── Mark Selesai ─────────────────────────────────────────────
 function handleMarkSelesai(order_id) {
   if (!order_id)
     return jsonResponse({ success: false, message: "order_id diperlukan" });

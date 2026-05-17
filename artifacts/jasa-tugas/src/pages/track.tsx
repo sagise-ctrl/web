@@ -32,23 +32,6 @@ import {
 } from "@/hooks/use-orders";
 import { useToast } from "@/hooks/use-toast";
 
-// ─── Snap global type ──────────────────────────────────────────
-declare global {
-  interface Window {
-    snap: {
-      pay: (
-        token: string,
-        options: {
-          onSuccess?: (result: any) => void;
-          onPending?: (result: any) => void;
-          onError?: (result: any) => void;
-          onClose?: () => void;
-        },
-      ) => void;
-    };
-  }
-}
-
 // ─── Status badge ──────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   "verifikasi tugas": {
@@ -175,25 +158,55 @@ function TombolBayar({
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [expiry, setExpiry] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
   async function handleBayar() {
     setLoading(true);
+    setDebugInfo(null);
+    let receivedDebug = false;
     try {
-      const res = await fetch("/api/midtrans/create-transaction", {
+      const res = await fetch("/api/dana/create-transaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order_id: orderId, tipe }),
       });
       const data = await res.json();
+      const debugPayload = {
+        http_status: res.status,
+        message: data.message,
+        detail: data.detail,
+        debug: data.debug,
+      };
+      console.log("DANA CREATE TRANSACTION DEBUG:", debugPayload);
+      setDebugInfo(JSON.stringify(debugPayload, null, 2));
+      receivedDebug = true;
 
       if (!data.success || !data.qr_url) {
-        throw new Error(data.message || "Gagal mendapat QR pembayaran");
+        const detailMessage = data.detail?.responseMessage
+          ? ` (${data.detail.responseMessage})`
+          : "";
+        throw new Error(
+          (data.message || "Gagal mendapat QR pembayaran") + detailMessage,
+        );
       }
 
       setQrUrl(data.qr_url);
       setExpiry(data.expiry);
       setPolling(true);
     } catch (err: any) {
+      if (!receivedDebug) {
+        setDebugInfo(
+          JSON.stringify(
+            {
+              client_error: err.message,
+              order_id: orderId,
+              tipe,
+            },
+            null,
+            2,
+          ),
+        );
+      }
       toast({
         variant: "destructive",
         title: "Gagal Memproses Pembayaran",
@@ -233,7 +246,7 @@ function TombolBayar({
           </p>
         )}
         <p className="text-xs text-slate-500 text-center">
-          Gunakan GoPay, OVO, Dana, atau aplikasi bank manapun
+          Gunakan DANA atau aplikasi QRIS lain yang didukung
         </p>
         <Button
           variant="outline"
@@ -251,19 +264,26 @@ function TombolBayar({
   }
 
   return (
-    <Button className="w-full" disabled={loading} onClick={handleBayar}>
-      {loading ? (
-        <>
-          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          Memproses...
-        </>
-      ) : (
-        <>
-          <CreditCard className="w-4 h-4 mr-2" />
-          {label} {formatRupiah(nominal)}
-        </>
+    <div className="space-y-3">
+      <Button className="w-full" disabled={loading} onClick={handleBayar}>
+        {loading ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Memproses...
+          </>
+        ) : (
+          <>
+            <CreditCard className="w-4 h-4 mr-2" />
+            {label} {formatRupiah(nominal)}
+          </>
+        )}
+      </Button>
+      {debugInfo && (
+        <pre className="max-h-72 overflow-auto rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-900 whitespace-pre-wrap">
+          {debugInfo}
+        </pre>
       )}
-    </Button>
+    </div>
   );
 }
 

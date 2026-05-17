@@ -29,6 +29,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...(bodyStr && { body: bodyStr }),
     });
 
+    if (!gasRes.ok) {
+      const text = await gasRes.text();
+      console.error("GAS_PROXY_ERROR:", gasRes.status, text.slice(0, 500));
+      return res.status(gasRes.status).json({
+        success: false,
+        message: `Google Apps Script error ${gasRes.status}`,
+        detail: text.slice(0, 500),
+      });
+    }
+
     const data = await gasRes.json();
     return res.status(200).json(data);
   } catch (err: any) {
