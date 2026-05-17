@@ -8,6 +8,7 @@ import {
   makePartnerReferenceNo,
   moneyValue,
   signDanaRequest,
+  danaStringToSign,
   minifyBody,
 } from "./_utils";
 
@@ -157,6 +158,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     partnerReferenceNo = makePartnerReferenceNo(order_id, tipe);
     debug.partnerReferenceNo = partnerReferenceNo;
     debug.partnerReferenceNoLength = partnerReferenceNo.length;
+
+    // Ensure partnerReferenceNo is unique per request to avoid duplicate rejection
+    const uniqueSuffix = Date.now();
+    partnerReferenceNo = `${partnerReferenceNo}-${uniqueSuffix}`;
+    debug.partnerReferenceNo = partnerReferenceNo;
+    debug.partnerReferenceNoLength = partnerReferenceNo.length;
   } catch (err: any) {
     debug.error = { name: err.name, message: err.message };
     debug.duration_ms = Date.now() - startedAt;
@@ -231,7 +238,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     debug.stage = "signing_dana_request";
     // Use a single deterministic stringified body for both signing and request
     const bodyString = minifyBody(body);
+    // Build exact string-to-sign for debug and verification
+    const stringToSign = danaStringToSign("POST", DANA_QRIS_PATH, bodyString, timestamp);
     const signature = signDanaRequest("POST", DANA_QRIS_PATH, bodyString, timestamp);
+    debug.stringToSign = stringToSign;
+    debug.signature = signature;
+    console.log("DANA STRING TO SIGN:", stringToSign);
+    console.log("DANA X-SIGNATURE:", signature);
     debug.stage = "calling_dana_qris";
     debug.danaRequest = {
       url: `${danaBaseUrl()}${DANA_QRIS_PATH}`,
