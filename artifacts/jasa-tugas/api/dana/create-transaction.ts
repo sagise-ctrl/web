@@ -172,11 +172,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   debug.expiry = expiry;
 
   try {
+    const terminalId = process.env.DANA_TERMINAL_ID?.trim();
+    const origin = normalizeDanaOrigin(
+      process.env.DANA_ORIGIN || req.headers.origin || "",
+    );
+    if (!origin) {
+      throw new Error(
+        "DANA origin tidak tersedia. Set DANA_ORIGIN atau kirim header Origin dari browser.",
+      );
+    }
+
     const body: Record<string, any> = {
       merchantId: requireEnv("DANA_MERCHANT_ID"),
       storeId: requireEnv("DANA_STORE_ID"),
-      // DANA docs mark terminalId as optional; many integrations use empty string.
-      terminalId: process.env.DANA_TERMINAL_ID || "",
       partnerReferenceNo,
       amount: {
         value: moneyValue(amount),
@@ -200,6 +208,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     };
 
+    if (terminalId) {
+      body.terminalId = terminalId;
+    }
     if (process.env.DANA_SUB_MERCHANT_ID) {
       body.subMerchantId = process.env.DANA_SUB_MERCHANT_ID;
     }
@@ -207,15 +218,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     debug.stage = "signing_dana_request";
     const signature = signDanaRequest("POST", DANA_QRIS_PATH, body, timestamp);
     debug.stage = "calling_dana_qris";
-    const origin = normalizeDanaOrigin(
-      process.env.DANA_ORIGIN || req.headers.origin || "",
-    );
     debug.danaRequest = {
       url: `${danaBaseUrl()}${DANA_QRIS_PATH}`,
       path: DANA_QRIS_PATH,
       merchantId: body.merchantId,
       storeId: body.storeId,
-      terminalId: body.terminalId,
+      terminalId: terminalId || null,
       partnerReferenceNo,
       amount: body.amount,
       validityPeriod: body.validityPeriod,
