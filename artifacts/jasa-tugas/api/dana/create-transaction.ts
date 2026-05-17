@@ -273,7 +273,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         Origin: origin,
         "X-PARTNER-ID": requireEnv("DANA_PARTNER_ID"),
         "X-EXTERNAL-ID": makeExternalId("QR"),
-        "CHANNEL_ID": process.env.DANA_CHANNEL_ID || "95221",
+        "CHANNEL-ID": process.env.DANA_CHANNEL_ID || "95221",
       },
       body: bodyString,
     });
