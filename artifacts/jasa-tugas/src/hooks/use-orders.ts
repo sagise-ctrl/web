@@ -271,7 +271,7 @@ export function hitungHarga(jenis: JenisTugas, halaman: number): number {
     return 20000 + Math.max(0, halaman - 2) * 4000;
   }
   if (jenis === "Test") {
-    return 2000;
+    return 5000;
   }
   return 0;
 }
