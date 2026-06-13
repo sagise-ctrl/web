@@ -158,55 +158,37 @@ function TombolBayar({
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [expiry, setExpiry] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
   async function handleBayar() {
     setLoading(true);
-    setDebugInfo(null);
-    let receivedDebug = false;
     try {
-      const res = await fetch("/api/dana/create-transaction", {
+      const res = await fetch("/api/payment/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order_id: orderId, tipe }),
+        body: JSON.stringify({
+          order_id: orderId,
+          tipe,
+          nama: "",
+          wa: "",
+          harga: nominal,
+          jenis: "",
+        }),
       });
       const data = await res.json();
-      const debugPayload = {
-        http_status: res.status,
-        message: data.message,
-        detail: data.detail,
-        debug: data.debug,
-      };
-      console.log("DANA CREATE TRANSACTION DEBUG:", debugPayload);
-      setDebugInfo(JSON.stringify(debugPayload, null, 2));
-      receivedDebug = true;
 
-      if (!data.success || !data.qr_url) {
+      if (!data.success || !data.payment_link) {
         const detailMessage = data.detail?.responseMessage
           ? ` (${data.detail.responseMessage})`
           : "";
         throw new Error(
-          (data.message || "Gagal mendapat QR pembayaran") + detailMessage,
+          (data.message || "Gagal membuat payment link") + detailMessage,
         );
       }
 
-      setQrUrl(data.qr_url);
-      setExpiry(data.expiry);
+      setQrUrl(data.payment_link);
+      setExpiry(null);
       setPolling(true);
     } catch (err: any) {
-      if (!receivedDebug) {
-        setDebugInfo(
-          JSON.stringify(
-            {
-              client_error: err.message,
-              order_id: orderId,
-              tipe,
-            },
-            null,
-            2,
-          ),
-        );
-      }
       toast({
         variant: "destructive",
         title: "Gagal Memproses Pembayaran",
@@ -235,19 +217,16 @@ function TombolBayar({
         <p className="text-lg font-bold text-primary">
           {formatRupiah(nominal)}
         </p>
-        <img
-          src={qrUrl}
-          alt="QR Code Pembayaran"
-          className="w-48 h-48 object-contain"
-        />
+        <iframe src={qrUrl} className="w-full h-96 border-0 rounded-lg" />
         {expiry && (
           <p className="text-xs text-slate-400">
             Berlaku hingga: {new Date(expiry).toLocaleTimeString("id-ID")}
           </p>
         )}
         <p className="text-xs text-slate-500 text-center">
-          Gunakan DANA atau aplikasi QRIS lain yang didukung
+          Selesaikan pembayaran di halaman berikut
         </p>
+
         <Button
           variant="outline"
           size="sm"
@@ -278,11 +257,6 @@ function TombolBayar({
           </>
         )}
       </Button>
-      {debugInfo && (
-        <pre className="max-h-72 overflow-auto rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-900 whitespace-pre-wrap">
-          {debugInfo}
-        </pre>
-      )}
     </div>
   );
 }
