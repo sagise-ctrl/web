@@ -51,7 +51,7 @@ const VALID_STATUSES = [
   "selesai",
 ];
 
-const VALID_JENIS = ["Makalah", "PPT", "Artikel", "Tugas Harian"];
+const VALID_JENIS = ["Makalah", "PPT", "Artikel", "Tugas Harian", "Test"];
 
 // ─── Sheet ────────────────────────────────────────────────────
 function getSheet() {
@@ -486,8 +486,13 @@ function handleUpdatePaymentStatus(data) {
 
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === data.order_id) {
-      sheet.getRange(i + 1, 22).setValue(data.mayar_transaction_id || "");
-      sheet.getRange(i + 1, 23).setValue(data.payment_status || "lunas");
+      if (data.tipe === "dp") {
+        sheet.getRange(i + 1, 22).setValue(data.mayar_transaction_id || "");
+        sheet.getRange(i + 1, 8).setValue("proses pengerjaan");
+      } else if (data.tipe === "final") {
+        sheet.getRange(i + 1, 23).setValue(data.mayar_transaction_id || "");
+        sheet.getRange(i + 1, 8).setValue("cek file");
+      }
       return jsonResponse({ success: true });
     }
   }

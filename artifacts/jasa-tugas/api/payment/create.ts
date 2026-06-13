@@ -26,7 +26,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       amount: Number(harga),
       mobile,
       redirectUrl: `https://tugasly.my.id/track?id=${order_id}`,
-      description: `Order ${order_id} - ${jenis}`,
+      description: `Order ${order_id} [${tipe}]`,
+
       expiredAt,
     };
 

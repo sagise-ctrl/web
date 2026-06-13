@@ -35,8 +35,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const transactionId = event?.data?.id;
     const productDescription: string = event?.data?.productDescription || "";
-    const match = productDescription.match(/Order (ORD-\S+)/);
-    const order_id = match ? match[1].replace(/\s*-\s*$/, "").trim() : null;
+    const match = productDescription.match(/Order (ORD-[\w-]+) \[(\w+)\]/);
+    const order_id = match ? match[1] : null;
+    const tipe = match ? match[2] : null; // "dp" atau "final"
 
     if (!order_id) {
       console.warn("WEBHOOK: order_id tidak ditemukan di custom_fields");
@@ -51,6 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         action: "updatePaymentStatus",
         data: {
           order_id,
+          tipe,
           payment_status: "lunas",
           mayar_transaction_id: transactionId || "",
         },
