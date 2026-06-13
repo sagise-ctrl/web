@@ -35,7 +35,10 @@ export function addMinutes(date: Date, minutes: number) {
 
 function stripQuotesAndNormalizeNewlines(value: string) {
   let pem = value.trim();
-  if ((pem.startsWith('"') && pem.endsWith('"')) || (pem.startsWith("'") && pem.endsWith("'"))) {
+  if (
+    (pem.startsWith('"') && pem.endsWith('"')) ||
+    (pem.startsWith("'") && pem.endsWith("'"))
+  ) {
     pem = pem.slice(1, -1).trim();
   }
   return pem.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
@@ -50,7 +53,9 @@ export function normalizePrivateKeyPem(value: string) {
     // already PEM — ensure proper wrapping/line lengths
     const header = headerMatch[0];
     const footer = footerMatch[0];
-    const body = pem.slice((headerMatch.index ?? 0) + header.length, footerMatch.index).replace(/\s+/g, "");
+    const body = pem
+      .slice((headerMatch.index ?? 0) + header.length, footerMatch.index)
+      .replace(/\s+/g, "");
     return `${header}\n${body.match(/.{1,64}/g)?.join("\n") || body}\n${footer}\n`;
   }
 
@@ -67,7 +72,9 @@ export function normalizePublicKeyPem(value: string) {
   if (headerMatch && footerMatch) {
     const header = headerMatch[0];
     const footer = footerMatch[0];
-    const body = pem.slice((headerMatch.index ?? 0) + header.length, footerMatch.index).replace(/\s+/g, "");
+    const body = pem
+      .slice((headerMatch.index ?? 0) + header.length, footerMatch.index)
+      .replace(/\s+/g, "");
     return `${header}\n${body.match(/.{1,64}/g)?.join("\n") || body}\n${footer}\n`;
   }
 
@@ -94,7 +101,9 @@ export function minifyBody(body: unknown) {
       );
     }
     if (t === "object") {
-      const keys = Object.keys(value).filter((k) => value[k] !== undefined).sort();
+      const keys = Object.keys(value)
+        .filter((k) => value[k] !== undefined)
+        .sort();
       return (
         "{" +
         keys
@@ -121,7 +130,9 @@ export function danaStringToSign(
   timestamp: string,
 ) {
   const bodyString = typeof body === "string" ? body : minifyBody(body);
-  return [method.toUpperCase(), path, sha256Hex(bodyString), timestamp].join(":");
+  return [method.toUpperCase(), path, sha256Hex(bodyString), timestamp].join(
+    ":",
+  );
 }
 
 export function signDanaRequest(
@@ -137,7 +148,7 @@ export function signDanaRequest(
   signer.update(danaStringToSign(method, path, body, timestamp));
   signer.end();
   try {
-  return signer.sign(normalizePrivateKeyPem(privateKey), "base64");
+    return signer.sign(normalizePrivateKeyPem(privateKey), "base64");
   } catch (err: any) {
     throw new Error(
       "DANA_PRIVATE_KEY tidak bisa dibaca sebagai RSA private key. Pastikan value berisi PEM lengkap BEGIN/END PRIVATE KEY atau base64 PKCS#8. Detail: " +
@@ -157,10 +168,10 @@ export function getDanaPrivateKeyDebug() {
   const format = normalized.includes("-----BEGIN RSA PRIVATE KEY-----")
     ? "PKCS#1"
     : normalized.includes("-----BEGIN PRIVATE KEY-----")
-    ? "PKCS#8"
-    : normalized.includes("-----BEGIN ENCRYPTED PRIVATE KEY-----")
-    ? "PKCS#8-encrypted"
-    : "unknown";
+      ? "PKCS#8"
+      : normalized.includes("-----BEGIN ENCRYPTED PRIVATE KEY-----")
+        ? "PKCS#8-encrypted"
+        : "unknown";
 
   const attempts: Array<{
     attempt: number;
@@ -188,7 +199,10 @@ export function getDanaPrivateKeyDebug() {
   let keyObj = tryCreate({ key: normalized, format: "pem" }, "pem");
 
   if (!keyObj) {
-    const rawBase64 = stripQuotesAndNormalizeNewlines(rawValue).replace(/\s+/g, "");
+    const rawBase64 = stripQuotesAndNormalizeNewlines(rawValue).replace(
+      /\s+/g,
+      "",
+    );
     keyObj = tryCreate(
       { key: Buffer.from(rawBase64, "base64"), format: "der", type: "pkcs8" },
       "der-pkcs8",
@@ -196,7 +210,10 @@ export function getDanaPrivateKeyDebug() {
   }
 
   if (!keyObj) {
-    const rawBase64 = stripQuotesAndNormalizeNewlines(rawValue).replace(/\s+/g, "");
+    const rawBase64 = stripQuotesAndNormalizeNewlines(rawValue).replace(
+      /\s+/g,
+      "",
+    );
     keyObj = tryCreate(
       { key: Buffer.from(rawBase64, "base64"), format: "der", type: "pkcs1" },
       "der-pkcs1",
@@ -214,8 +231,12 @@ export function getDanaPrivateKeyDebug() {
   }
 
   try {
-    const publicKeyPem = keyObj.export({ type: "spki", format: "pem" }).toString();
-    const details = keyObj.asymmetricKeyDetails as { modulusLength?: number } | undefined;
+    const publicKeyPem = keyObj
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    const details = keyObj.asymmetricKeyDetails as
+      | { modulusLength?: number }
+      | undefined;
     return {
       ok: true,
       format,
@@ -253,7 +274,11 @@ export function verifyDanaSignature(
   verifier.update(danaStringToSign(method, path, body, timestamp));
   verifier.end();
   try {
-  return verifier.verify(normalizePublicKeyPem(publicKey), signature, "base64");
+    return verifier.verify(
+      normalizePublicKeyPem(publicKey),
+      signature,
+      "base64",
+    );
   } catch (err: any) {
     throw new Error(
       "DANA_PUBLIC_KEY tidak bisa dibaca sebagai RSA public key. Pastikan value berisi PEM lengkap BEGIN/END PUBLIC KEY. Detail: " +
@@ -271,7 +296,10 @@ export function makeExternalId(prefix = "EXT") {
   })
     .format(new Date())
     .replace(/-/g, "");
-  return `${prefix}${date}${crypto.randomBytes(6).toString("hex")}`.slice(0, 36);
+  return `${prefix}${date}${crypto.randomBytes(6).toString("hex")}`.slice(
+    0,
+    36,
+  );
 }
 
 export function makePartnerReferenceNo(orderId: string, tipe: "dp" | "final") {

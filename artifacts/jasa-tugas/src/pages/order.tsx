@@ -250,7 +250,7 @@ export default function OrderPage() {
       biayaTambahan(step2Data.tipe_order);
     try {
       // 1. Buat order dulu
-      const res = await createOrder.mutateAsync({
+      const payload = {
         nama: step1Data.nama,
         wa: step1Data.wa,
         jenis: step2Data.jenis,
@@ -260,25 +260,55 @@ export default function OrderPage() {
         harga: hargaFinal,
         dp,
         sisa_bayar: Math.max(0, hargaFinal - dp),
-      } as any);
+      } as any;
 
-      const newOrderId = res.order_id;
+      // GANTI bagian setelah mutateAsync berhasil:
+      const result = await createOrder.mutateAsync({ ...payload });
 
-      // 2. Jika ada file pendukung, upload setelah jeda singkat
-      //    agar baris order di Sheets sudah committed sebelum dicari
+      if (!result.success || !result.order_id) {
+        throw new Error("Gagal membuat order");
+      }
+
+      const order_id = result.order_id;
+
+      // Buat payment link via Mayar
+      const paymentRes = await fetch("/api/payment/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id,
+          nama: step1Data.nama,
+          wa: step1Data.wa,
+          harga: hargaFinal,
+          jenis: step2Data.jenis,
+        }),
+      });
+
+      const paymentData = await paymentRes.json();
+
+      if (!paymentData.success || !paymentData.payment_link) {
+        // Order sudah tersimpan tapi payment link gagal dibuat
+        // Tetap arahkan ke track page, user bisa hubungi CS
+        console.error("Payment link gagal:", paymentData);
+        window.location.href = `/track?id=${order_id}&status=payment_error`;
+        return;
+      }
+
+      // Redirect ke halaman pembayaran Mayar
+      window.location.href = paymentData.payment_link;
+
+      // (opsional) tetap pertahankan step/success state untuk fallback UI
       if (fileTugasFile) {
         try {
           await new Promise((resolve) => setTimeout(resolve, 1500));
           const base64 = await fileToBase64(fileTugasFile);
           await uploadBukti.mutateAsync({
-            orderId: newOrderId,
+            orderId: order_id,
             tipe: "file_tugas",
             fileBase64: base64,
             fileName: fileTugasFile.name,
           });
         } catch {
-          // File gagal upload, tapi order sudah berhasil dibuat.
-          // Tidak batalkan order — beri tahu user via toast.
           toast({
             variant: "destructive",
             title: "File Pendukung Gagal Diupload",
@@ -289,7 +319,7 @@ export default function OrderPage() {
       }
 
       localStorage.setItem(WA_KEY(step1Data.wa), step1Data.nama);
-      setSuccessOrderId(newOrderId);
+      setSuccessOrderId(order_id);
       setStep(4);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error: any) {

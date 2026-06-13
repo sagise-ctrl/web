@@ -164,6 +164,8 @@ function doPost(e) {
       return handleUpdatePayment(body.order_id, body.tipe, body.transaction_id);
     if (body.action === "saveSnapToken")
       return handleSaveSnapToken(body.order_id, body.snap_token);
+    if (body.action === "updatePaymentStatus")
+      return handleUpdatePaymentStatus(body.data);
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
     return jsonResponse({ success: false, message: err.message });
@@ -223,7 +225,7 @@ function handleCreateOrder(data) {
     "",
     "",
     "",
-    "",
+    "belum_bayar",
   ]);
   return jsonResponse({ success: true, order_id });
 }
@@ -470,6 +472,27 @@ function handleMarkSelesai(order_id) {
     }
   }
   return jsonResponse({ success: false, message: "Order tidak ditemukan" });
+}
+
+// ─── Update Payment Status (custom) ───────────────────────────
+function handleUpdatePaymentStatus(data) {
+  if (!data || !data.order_id) {
+    return jsonResponse({ success: false, message: "order_id diperlukan" });
+  }
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === data.order_id) {
+      sheet.getRange(i + 1, 22).setValue(data.mayar_transaction_id || "");
+      sheet.getRange(i + 1, 23).setValue(data.payment_status || "lunas");
+      return jsonResponse({ success: true });
+    }
+  }
+
+  return jsonResponse({ success: false, message: "order_id tidak ditemukan" });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
