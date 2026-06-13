@@ -57,7 +57,7 @@ const step1Schema = z.object({
 });
 
 const step2Schema = z.object({
-  jenis: z.enum(["Makalah", "PPT", "Artikel", "Tugas Harian"], {
+  jenis: z.enum(["Makalah", "PPT", "Artikel", "Tugas Harian", "Test"], {
     required_error: "Pilih jenis tugas.",
   }),
   halaman: z.coerce.number().min(1, "Minimal 1."),
@@ -588,6 +588,7 @@ export default function OrderPage() {
                       <option value="PPT">Presentasi (PPT)</option>
                       <option value="Artikel">Artikel Ilmiah</option>
                       <option value="Tugas Harian">Tugas Harian</option>
+                      <option value="Test">Test</option>
                     </select>
                     {form2.formState.errors.jenis && (
                       <p className="text-[0.8rem] font-medium text-destructive">

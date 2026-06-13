@@ -10,7 +10,12 @@ export type OrderStatus =
   | "revisi"
   | "selesai";
 
-export type JenisTugas = "Makalah" | "PPT" | "Artikel" | "Tugas Harian";
+export type JenisTugas =
+  | "Makalah"
+  | "PPT"
+  | "Artikel"
+  | "Tugas Harian"
+  | "Test";
 export type TipeOrder = "standar" | "ekspres" | "super ekspres";
 
 export interface Order {
@@ -264,6 +269,9 @@ export function hitungHarga(jenis: JenisTugas, halaman: number): number {
   }
   if (jenis === "Tugas Harian") {
     return 20000 + Math.max(0, halaman - 2) * 4000;
+  }
+  if (jenis === "Test") {
+    return 1000;
   }
   return 0;
 }
