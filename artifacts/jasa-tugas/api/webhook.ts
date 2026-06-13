@@ -34,9 +34,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const transactionId = event?.data?.id;
-    const customFields: any[] = event?.data?.custom_field || [];
-    const orderField = customFields.find((f: any) => f.key === "order_id");
-    const order_id = orderField?.value;
+    const productDescription: string = event?.data?.productDescription || "";
+    const match = productDescription.match(/Order (ORD-\S+)/);
+    const order_id = match ? match[1].replace(/\s*-\s*$/, "").trim() : null;
 
     if (!order_id) {
       console.warn("WEBHOOK: order_id tidak ditemukan di custom_fields");
