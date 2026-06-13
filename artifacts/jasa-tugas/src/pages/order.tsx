@@ -271,11 +271,6 @@ export default function OrderPage() {
 
       const order_id = result.order_id;
 
-      // Redirect langsung ke halaman tracking setelah order dibuat
-      window.location.href = `/track?id=${order_id}`;
-      return;
-
-      // (opsional) tetap pertahankan step/success state untuk fallback UI
       if (fileTugasFile) {
         try {
           await new Promise((resolve) => setTimeout(resolve, 1500));
