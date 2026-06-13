@@ -11,15 +11,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { order_id, nama, wa, harga, jenis } = req.body;
 
-    if (!order_id || !nama || !wa || !harga)
+    if (!order_id || !harga)
       return res.status(400).json({ error: "Data tidak lengkap" });
 
-    // Nomor WA → format email dummy karena Mayar wajib email
-    // Gunakan email dummy berbasis order_id
-    const email = `order_${order_id}@tugasly.my.id`;
-
-    // Format nomor WA: pastikan diawali 08 atau 62
-    const mobile = String(wa).startsWith("0") ? wa : `0${wa}`;
+    const email = `order@tugasly.my.id`;
+    const mobile = `08000000000`;
 
     // Expired 24 jam dari sekarang
     const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
