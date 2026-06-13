@@ -271,31 +271,9 @@ export default function OrderPage() {
 
       const order_id = result.order_id;
 
-      // Buat payment link via Mayar
-      const paymentRes = await fetch("/api/payment/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_id,
-          nama: step1Data.nama,
-          wa: step1Data.wa,
-          harga: hargaFinal,
-          jenis: step2Data.jenis,
-        }),
-      });
-
-      const paymentData = await paymentRes.json();
-
-      if (!paymentData.success || !paymentData.payment_link) {
-        // Order sudah tersimpan tapi payment link gagal dibuat
-        // Tetap arahkan ke track page, user bisa hubungi CS
-        console.error("Payment link gagal:", paymentData);
-        window.location.href = `/track?id=${order_id}&status=payment_error`;
-        return;
-      }
-
-      // Redirect ke halaman pembayaran Mayar
-      window.location.href = paymentData.payment_link;
+      // Redirect langsung ke halaman tracking setelah order dibuat
+      window.location.href = `/track?id=${order_id}`;
+      return;
 
       // (opsional) tetap pertahankan step/success state untuk fallback UI
       if (fileTugasFile) {
