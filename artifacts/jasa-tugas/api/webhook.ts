@@ -4,50 +4,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST")
     return res.status(405).json({ error: "Method not allowed" });
 
-  const MAYAR_WEBHOOK_TOKEN = process.env.MAYAR_WEBHOOK_TOKEN;
   const GAS_URL = process.env.GAS_URL;
-
-  if (!MAYAR_WEBHOOK_TOKEN || !GAS_URL)
+  if (!GAS_URL)
     return res.status(500).json({ error: "Server tidak terkonfigurasi" });
 
   try {
-    // Verifikasi token dari header Mayar
-    const incomingToken =
-      req.headers["authorization"]?.toString().replace("Bearer ", "") ||
-      req.headers["x-mayar-token"]?.toString() ||
-      "";
-
-    if (incomingToken !== MAYAR_WEBHOOK_TOKEN) {
-      console.warn("WEBHOOK: token tidak valid", incomingToken);
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
     const event = req.body;
 
+    // Log semua header untuk debug
+    console.log("WEBHOOK_HEADERS:", JSON.stringify(req.headers));
+    console.log("WEBHOOK_BODY:", JSON.stringify(event));
+
     // Hanya proses event payment.received
-    if (
-      event?.event?.received !== "payment.received" &&
-      event?.event !== "payment.received"
-    ) {
-      return res.status(200).json({ message: "Event diabaikan" });
+    if (event?.event !== "payment.received") {
+      return res
+        .status(200)
+        .json({ message: "Event diabaikan", event: event?.event });
     }
 
     const transactionId = event?.data?.id;
-    const customerEmail: string = event?.data?.customerEmail || "";
+    const customFields: any[] = event?.data?.custom_field || [];
+    const orderField = customFields.find((f: any) => f.key === "order_id");
+    const order_id = orderField?.value;
 
-    // Ambil order_id dari email dummy: order_XXXX@tugasly.my.id
-    const match = customerEmail.match(/^order_(.+)@tugasly\.my\.id$/);
-    if (!match) {
-      console.warn(
-        "WEBHOOK: tidak bisa parse order_id dari email",
-        customerEmail,
-      );
+    if (!order_id) {
+      console.warn("WEBHOOK: order_id tidak ditemukan di custom_fields");
       return res.status(200).json({ message: "order_id tidak ditemukan" });
     }
 
-    const order_id = match[1];
-
-    // Update payment status di GAS
     const gasRes = await fetch(GAS_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
@@ -68,7 +52,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true });
   } catch (err: any) {
     console.error("WEBHOOK_ERROR:", err.message);
-    // Tetap return 200 agar Mayar tidak retry terus
     return res.status(200).json({ error: err.message });
   }
 }
