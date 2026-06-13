@@ -85,6 +85,7 @@ function halamanOptions(jenis: JenisTugas) {
     for (let i = 2; i <= 15; i++) opts.push(i);
     return opts;
   }
+  if (jenis === "Test") return [1];
   return [];
 }
 
