@@ -15,7 +15,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log("WEBHOOK_HEADERS:", JSON.stringify(req.headers));
     console.log("WEBHOOK_BODY:", JSON.stringify(event));
 
-    // Hanya proses event payment.received
+    // Verifikasi token webhook Mayar
+    const incomingToken = req.headers["x-callback-token"]?.toString() || "";
+    const MAYAR_WEBHOOK_TOKEN = process.env.MAYAR_WEBHOOK_TOKEN;
+    if (MAYAR_WEBHOOK_TOKEN && incomingToken !== MAYAR_WEBHOOK_TOKEN) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Hanya proses event payment.received (dan testing harus tetap 200)
+    if (event?.event === "testing") {
+      return res.status(200).json({ success: true });
+    }
+
     if (event?.event !== "payment.received") {
       return res
         .status(200)
