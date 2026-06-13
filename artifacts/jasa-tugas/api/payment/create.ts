@@ -9,7 +9,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Server tidak terkonfigurasi" });
 
   try {
-    const { order_id, nama, wa, harga, jenis } = req.body;
+    const { order_id, nama, wa, harga, jenis, tipe } = req.body;
 
     if (!order_id || !harga)
       return res.status(400).json({ error: "Data tidak lengkap" });
