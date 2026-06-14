@@ -205,8 +205,8 @@ export default function OrderPage() {
     let foundNamaLama: string | null = localStorage.getItem(WA_KEY(waNormal));
     console.log("localStorage result:", foundNamaLama);
 
-    if (!foundNamaLama && import.meta.env.GAS_URL) {
-      console.log("GAS URL:", import.meta.env.GAS_URL);
+    if (!foundNamaLama && import.meta.env.VITE_GAS_URL) {
+      console.log("GAS URL:", import.meta.env.VITE_GAS_URL);
       try {
         const result = await checkWa.mutateAsync(waNormal);
         console.log("GAS response:", result);
@@ -221,8 +221,8 @@ export default function OrderPage() {
       } catch (err) {
         console.error("GAS error:", err);
       }
-    } else if (!import.meta.env.GAS_URL) {
-      console.warn("GAS_URL tidak di-set, skip GAS");
+    } else if (!import.meta.env.VITE_GAS_URL) {
+      console.warn("VITE_GAS_URL tidak di-set, skip GAS");
     }
 
     console.log("foundNamaLama final:", foundNamaLama);
