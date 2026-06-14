@@ -270,6 +270,7 @@ export default function OrderPage() {
     const hargaFinal =
       hitungHarga(step2Data.jenis, step2Data.halaman) +
       biayaTambahan(step2Data.tipe_order);
+    const dp = Math.ceil(hargaFinal * 0.33);
     try {
       // 1. Buat order dulu
       const payload = {
