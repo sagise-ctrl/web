@@ -394,7 +394,7 @@ export default function OrderPage() {
                   {[
                     "Admin memverifikasi detail pesanan Anda",
                     "Anda akan diminta membayar DP melalui halaman tracking",
-                    "Admin memverifikasi DP dan mulai mengerjakan tugas",
+                    "Setelah pembayaran DP selesai, Admin mulai mengerjakan tugas",
                     "Setelah selesai, bayar pelunasan untuk mengunduh hasil",
                   ].map((item, i) => (
                     <li
