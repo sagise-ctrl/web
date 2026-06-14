@@ -178,7 +178,6 @@ export default function OrderPage() {
   });
 
   const watchedNote = form2.watch("note") || "";
-  const dp = 10000;
 
   const hargaPreview = selectedJenis
     ? hitungHarga(selectedJenis, selectedHalaman) + biayaTambahan(selectedTipe)
@@ -447,6 +446,7 @@ export default function OrderPage() {
     const hDasar = hitungHarga(jenis, halaman);
     const hTambahan = biayaTambahan(tipe);
     const hTotal = hDasar + hTambahan;
+    const dp = Math.ceil(hTotal * 0.33);
     const isUploading = uploadBukti.isPending;
 
     return (
