@@ -185,20 +185,19 @@ export default function OrderPage() {
     : 0;
 
   // ─── Step 1: cek WA ─────────────────────────────────────────
+  function normalizeWa(wa: string): string {
+    wa = wa.replace(/\D/g, "");
+    if (wa.startsWith("62")) wa = wa.slice(2);
+    else if (wa.startsWith("0")) wa = wa.slice(1);
+    return wa;
+  }
   async function onStep1Submit(data: Step1Values) {
     setWaWarning(null);
     setNamaLama(null);
     setWaLama(null);
 
-    console.log("=== DEBUG STEP 1 ===");
-    console.log("WA input asli:", data.wa);
-    console.log("Nama input:", data.nama);
-
     const waNormal = normalizeWa(data.wa);
-    console.log("WA setelah normalize:", waNormal);
-
     let foundNamaLama: string | null = localStorage.getItem(WA_KEY(waNormal));
-    console.log("localStorage result:", foundNamaLama);
 
     if (!foundNamaLama && import.meta.env.VITE_GAS_URL) {
       console.log("Memanggil GAS...");
