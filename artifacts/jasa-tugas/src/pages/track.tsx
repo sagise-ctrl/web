@@ -180,9 +180,7 @@ function TombolBayar({
         const detailMessage = data.detail?.responseMessage
           ? ` (${data.detail.responseMessage})`
           : "";
-        throw new Error(
-          (data.message || "Gagal membuat payment link") + detailMessage,
-        );
+        throw new Error(data.message || "Gagal membuat payment link");
       }
 
       setQrUrl(data.payment_link);

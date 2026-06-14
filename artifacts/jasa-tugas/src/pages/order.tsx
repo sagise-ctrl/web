@@ -185,19 +185,27 @@ export default function OrderPage() {
     : 0;
 
   // ─── Step 1: cek WA ─────────────────────────────────────────
+  function normalizeWa(wa: string): string {
+    wa = wa.replace(/\D/g, "");
+    if (wa.startsWith("62")) wa = wa.slice(2);
+    else if (wa.startsWith("0")) wa = wa.slice(1);
+    return wa;
+  }
+
   async function onStep1Submit(data: Step1Values) {
     setWaWarning(null);
     setNamaLama(null);
     setWaLama(null);
 
-    let foundNamaLama: string | null = localStorage.getItem(WA_KEY(data.wa));
+    const waNormal = normalizeWa(data.wa);
+    let foundNamaLama: string | null = localStorage.getItem(WA_KEY(waNormal));
 
     if (!foundNamaLama && import.meta.env.VITE_GAS_URL) {
       try {
-        const result = await checkWa.mutateAsync(data.wa);
+        const result = await checkWa.mutateAsync(waNormal); // <-- pakai waNormal
         if (result.exists && result.nama_sebelumnya) {
           foundNamaLama = result.nama_sebelumnya;
-          localStorage.setItem(WA_KEY(data.wa), foundNamaLama);
+          localStorage.setItem(WA_KEY(waNormal), foundNamaLama);
         }
       } catch {
         /* GAS tidak tersedia */
@@ -236,7 +244,6 @@ export default function OrderPage() {
     setWaLama(null);
     setStep(2);
   }
-
   // ─── Step 2 ──────────────────────────────────────────────────
   function onStep2Submit(data: Step2Values) {
     setStep2Data({ ...data, tipe_order: selectedTipe });

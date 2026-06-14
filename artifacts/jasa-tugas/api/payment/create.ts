@@ -45,7 +45,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!mayarRes.ok || mayarData.statusCode !== 200) {
       console.error("MAYAR_ERROR:", mayarData);
       return res.status(500).json({
-        error: "Gagal membuat payment link",
+        success: false,
+        message:
+          mayarData.messages ||
+          mayarData.message ||
+          "Gagal membuat payment link",
         detail: mayarData,
       });
     }
