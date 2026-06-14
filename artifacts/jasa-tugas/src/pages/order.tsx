@@ -185,38 +185,33 @@ export default function OrderPage() {
     : 0;
 
   // ─── Step 1: cek WA ─────────────────────────────────────────
-  function normalizeWa(wa: string): string {
-    wa = wa.replace(/\D/g, "");
-    if (wa.startsWith("62")) wa = wa.slice(2);
-    else if (wa.startsWith("0")) wa = wa.slice(1);
-    return wa;
-  }
   async function onStep1Submit(data: Step1Values) {
     setWaWarning(null);
     setNamaLama(null);
     setWaLama(null);
 
-    const waNormal = normalizeWa(data.wa);
     console.log("=== DEBUG STEP 1 ===");
     console.log("WA input asli:", data.wa);
-    console.log("WA setelah normalize:", waNormal);
     console.log("Nama input:", data.nama);
+
+    const waNormal = normalizeWa(data.wa);
+    console.log("WA setelah normalize:", waNormal);
 
     let foundNamaLama: string | null = localStorage.getItem(WA_KEY(waNormal));
     console.log("localStorage result:", foundNamaLama);
 
     if (!foundNamaLama && import.meta.env.VITE_GAS_URL) {
-      console.log("GAS URL:", import.meta.env.VITE_GAS_URL);
+      console.log("Memanggil GAS...");
       try {
         const result = await checkWa.mutateAsync(waNormal);
-        console.log("GAS response:", result);
-
+        console.log("GAS exists:", result.exists);
+        console.log("GAS ada nama_sebelumnya:", !!result.nama_sebelumnya);
         if (result.exists && result.nama_sebelumnya) {
           foundNamaLama = result.nama_sebelumnya;
           localStorage.setItem(WA_KEY(waNormal), foundNamaLama);
-          console.log("Nama lama ditemukan:", foundNamaLama);
+          console.log("Nama lama ditemukan di GAS");
         } else {
-          console.log("GAS: WA tidak ditemukan / exists=false");
+          console.log("WA tidak ditemukan di GAS");
         }
       } catch (err) {
         console.error("GAS error:", err);
@@ -227,7 +222,7 @@ export default function OrderPage() {
 
     console.log("foundNamaLama final:", foundNamaLama);
     console.log(
-      "Cocok?",
+      "Nama cocok?",
       foundNamaLama?.toLowerCase() === data.nama.toLowerCase(),
     );
 
@@ -235,7 +230,7 @@ export default function OrderPage() {
       foundNamaLama &&
       foundNamaLama.toLowerCase() !== data.nama.toLowerCase()
     ) {
-      console.log("=> BLOKIR: nama tidak cocok");
+      console.log("=> BLOKIR");
       setNamaLama(foundNamaLama);
       setWaLama(data.wa);
       setWaWarning(
@@ -244,8 +239,25 @@ export default function OrderPage() {
       return;
     }
 
-    console.log("=> LOLOS: lanjut ke step 2");
+    console.log("=> LOLOS ke step 2");
     setStep1Data(data);
+    setStep(2);
+  }
+
+  function onGantiWa() {
+    setWaWarning(null);
+    setNamaLama(null);
+    setWaLama(null);
+    form1.setValue("wa", "");
+    form1.setFocus("wa");
+  }
+
+  function onPakaiDataLama() {
+    if (!namaLama || !waLama) return;
+    setStep1Data({ nama: namaLama, wa: waLama });
+    setWaWarning(null);
+    setNamaLama(null);
+    setWaLama(null);
     setStep(2);
   }
   // ─── Step 2 ──────────────────────────────────────────────────
