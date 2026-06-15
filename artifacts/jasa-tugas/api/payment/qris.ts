@@ -8,6 +8,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
 
   const { transaction_id } = req.body;
+  console.log("QRIS: transaction_id =", transaction_id);
 
   if (!transaction_id)
     return res.status(400).json({ error: "transaction_id wajib diisi" });
@@ -35,6 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       }),
     });
+    console.log("QRIS: step1 done");
 
     // Step 2: ambil qr_string
     const gqlRes = await fetch(GRAPHQL_ENDPOINT, {
@@ -60,7 +62,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     });
 
-    const gqlData = await gqlRes.json();
+    const rawText = await gqlRes.text();
+    console.log("QRIS: step2 response =", rawText);
+
+    const gqlData = JSON.parse(rawText);
+
     const node = gqlData?.data?.getPaymentRequest;
 
     if (!node) {
@@ -96,11 +102,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .status(200)
       .json({ success: true, qr_string, expires_at: expires_at ?? null });
   } catch (err: any) {
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: "Gagal menghubungi Mayar: " + err.message,
-      });
+    return res.status(500).json({
+      success: false,
+      error: "Gagal menghubungi Mayar: " + err.message,
+    });
   }
 }
