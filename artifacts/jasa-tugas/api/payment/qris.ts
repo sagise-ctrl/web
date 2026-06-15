@@ -72,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!node) {
       return res
         .status(502)
-        .json({ success: false, error: "Response GraphQL tidak valid" });
+        .json({ success: false, error: "Response GraphQL tidak valid!" });
     }
 
     let parsed: any = {};
