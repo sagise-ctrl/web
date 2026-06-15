@@ -11,7 +11,8 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cookie": "^1.1.1",
-    "jsonwebtoken": "^9.0.3"
+    "jsonwebtoken": "^9.0.3",
+    "qrcode.react": "^4.2.0"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

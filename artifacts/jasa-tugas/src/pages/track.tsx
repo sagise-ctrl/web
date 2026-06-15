@@ -31,6 +31,7 @@ import {
   formatEstimasi,
 } from "@/hooks/use-orders";
 import { useToast } from "@/hooks/use-toast";
+import { QRCodeSVG } from "qrcode.react";
 
 // ─── Status badge ──────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
@@ -158,6 +159,7 @@ function TombolBayar({
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [expiry, setExpiry] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
+  const [qrString, setQrString] = useState<string | null>(null);
 
   async function handleBayar() {
     setLoading(true);
@@ -184,6 +186,18 @@ function TombolBayar({
       }
 
       setQrUrl(data.payment_link);
+      if (data.transaction_id) {
+        fetch("/api/payment/qris", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transaction_id: data.transaction_id }),
+        })
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.success && d.qr_string) setQrString(d.qr_string);
+          })
+          .catch(() => {}); // fallback ke iframe jika gagal
+      }
       setExpiry(null);
       setPolling(true);
     } catch (err: any) {
@@ -215,7 +229,14 @@ function TombolBayar({
         <p className="text-lg font-bold text-primary">
           {formatRupiah(nominal)}
         </p>
-        <iframe src={qrUrl} className="w-full h-96 border-0 rounded-lg" />
+        {qrString ? (
+          <div className="p-3 bg-white border rounded-xl shadow-sm">
+            <QRCodeSVG value={qrString} size={250} />
+          </div>
+        ) : (
+          <iframe src={qrUrl} className="w-full h-96 border-0 rounded-lg" />
+        )}
+
         {expiry && (
           <p className="text-xs text-slate-400">
             Berlaku hingga: {new Date(expiry).toLocaleTimeString("id-ID")}
@@ -231,6 +252,7 @@ function TombolBayar({
           className="w-full"
           onClick={() => {
             setQrUrl(null);
+            setQrString(null);
             setPolling(false);
           }}
         >
