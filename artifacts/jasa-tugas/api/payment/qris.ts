@@ -45,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         operationName: "getPaymentRequest",
         query: `
-          query getPaymentRequest($paymentLinkTransactionId: String!, $domain: String!) {
+          query getPaymentRequest($paymentLinkTransactionId: ID!, $domain: String!) {
             getPaymentRequest(
               paymentLinkTransactionId: $paymentLinkTransactionId
               domain: $domain
