@@ -71,10 +71,21 @@ type Step2Values = z.infer<typeof step2Schema>;
 const WA_KEY = (wa: string) => `jt_wa_${wa}`;
 
 function hitungEstimasi(jenis: string, halaman: number, tipe: string): string {
-  const jamPerHalaman = jenis === "PPT" ? 4.8 : 2.4;
-  let jamTotal = halaman * jamPerHalaman;
-  if (tipe === "ekspres") jamTotal = Math.max(1, jamTotal - 24);
-  if (tipe === "super ekspres") jamTotal = Math.max(1, jamTotal - 48);
+  let jamTotal = 0;
+
+  if (jenis === "Makalah" || jenis === "Artikel") {
+    jamTotal = 3 * 24 + (halaman - 10) * 2;
+  } else if (jenis === "PPT") {
+    jamTotal = 4 * 24 + (halaman - 5) * 2.5;
+  } else if (jenis === "Tugas Harian") {
+    jamTotal = 3 * 24 + (halaman - 2) * 3;
+  } else {
+    jamTotal = 3 * 24; // fallback (Test dll)
+  }
+
+  if (tipe === "ekspres") jamTotal -= 24;
+  if (tipe === "super ekspres") jamTotal -= 48;
+
   const estimasi = new Date(new Date().getTime() + jamTotal * 60 * 60 * 1000);
   const tgl = estimasi.toLocaleDateString("id-ID", {
     weekday: "long",
