@@ -230,8 +230,144 @@ function TombolBayar({
           {formatRupiah(nominal)}
         </p>
         {qrString ? (
-          <div className="p-3 bg-white border rounded-xl shadow-sm">
-            <QRCodeSVG value={qrString} size={250} />
+          <div className="flex flex-col items-center gap-2">
+            <div
+              className="p-3 bg-white border rounded-xl shadow-sm"
+              id="qr-container"
+            >
+              <QRCodeSVG value={qrString} size={250} />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const svg = document.querySelector(
+                  "#qr-container svg",
+                ) as SVGElement;
+                if (!svg) return;
+
+                const padding = 24;
+                const qrSize = 250;
+                const logoSize = 32;
+                const canvasWidth = qrSize + padding * 2;
+                const headerHeight = 56; // logo + brand
+                const nominalHeight = 36; // nominal
+                const qrHeight = qrSize + 16; // QR + padding dalam
+                const footerHeight = 44; // keterangan bawah
+                const canvasHeight =
+                  padding +
+                  headerHeight +
+                  nominalHeight +
+                  qrHeight +
+                  footerHeight +
+                  padding;
+
+                const canvas = document.createElement("canvas");
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+                const ctx = canvas.getContext("2d")!;
+
+                // Background putih
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+                // Load logo SVG
+                const logoSvgStr =
+                  `<?xml version="1.0" encoding="utf-8"?>${svg.ownerDocument.querySelector ? "" : ""}` +
+                  `<svg width="800px" height="800px" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M696.2 411.6C498.7 368.3 660.6 94.4 390 117.1s-527.2 645.8-46.8 791.7 727.9-414.9 353-497.2z" fill="#464BD8" /><path d="M646 807.5c-1.6 0-3.2-0.2-4.8-0.5l-307-60.3c-6.4-1.3-12-4.9-15.6-10.4-3.6-5.4-5-12-3.7-18.4l86.6-441c2.3-11.5 12.3-19.8 24-19.8 1.6 0 3.2 0.2 4.8 0.5l307 60.3c13.3 2.6 21.9 15.5 19.3 28.7l-86.6 441c-2.3 11.6-12.4 19.9-24 19.9z" fill="#FFFFFF" /><path d="M640.2 793.7c-1.4 0-2.8-0.1-4.2-0.4l-269.8-53c-5.6-1.1-10.5-4.3-13.7-9.1-3.2-4.8-4.4-10.5-3.2-16.2l76.1-387.5c2-10.1 10.8-17.4 21.1-17.4 1.4 0 2.8 0.1 4.2 0.4l269.8 53c11.6 2.3 19.3 13.6 17 25.3l-76.1 387.5c-2.1 10.1-10.9 17.4-21.2 17.4z" fill="#2AEFC8"/><path d="M674.4 274.5c1.4-2.7 2.6-5.6 3.2-8.8 3.6-17.8-8.1-35.1-25.9-38.6l-90.4-17.8c-17.8-3.5-35.1 8.1-38.6 25.9-0.6 3.1-0.6 6.1-0.4 9.1-24.4-3-45.2 4.5-48.4 21.2l234.2 47.6c3.2-16-11.6-31.6-33.7-38.6z" fill="#514DDF" /></svg>`;
+
+                const logoBlob = new Blob([logoSvgStr], {
+                  type: "image/svg+xml;charset=utf-8",
+                });
+                const logoUrl = URL.createObjectURL(logoBlob);
+                const logoImg = new Image();
+
+                logoImg.onload = () => {
+                  // Draw logo (kiri atas area header)
+                  const headerY = padding;
+                  ctx.drawImage(
+                    logoImg,
+                    padding,
+                    headerY + (headerHeight - logoSize) / 2,
+                    logoSize,
+                    logoSize,
+                  );
+                  URL.revokeObjectURL(logoUrl);
+
+                  // Draw "Tugasly"
+                  ctx.fillStyle = "#1e1e2e";
+                  ctx.font = "bold 22px sans-serif";
+                  ctx.textBaseline = "middle";
+                  ctx.fillText(
+                    "Tugasly",
+                    padding + logoSize + 10,
+                    headerY + headerHeight / 2,
+                  );
+
+                  // Draw nominal
+                  const nominalY = padding + headerHeight;
+                  ctx.fillStyle = "#464BD8";
+                  ctx.font = "bold 20px sans-serif";
+                  ctx.textAlign = "center";
+                  ctx.fillText(
+                    formatRupiah(nominal),
+                    canvasWidth / 2,
+                    nominalY + nominalHeight / 2,
+                  );
+
+                  // Draw QR dari DOM
+                  const qrSvg = document.querySelector(
+                    "#qr-container svg",
+                  ) as SVGElement;
+                  const serializer = new XMLSerializer();
+                  const qrSvgStr = serializer.serializeToString(qrSvg);
+                  const qrBlob = new Blob([qrSvgStr], {
+                    type: "image/svg+xml;charset=utf-8",
+                  });
+                  const qrUrl = URL.createObjectURL(qrBlob);
+                  const qrImg = new Image();
+
+                  qrImg.onload = () => {
+                    const qrY = padding + headerHeight + nominalHeight + 8;
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(padding, qrY, qrSize, qrSize);
+                    ctx.drawImage(qrImg, padding, qrY, qrSize, qrSize);
+                    URL.revokeObjectURL(qrUrl);
+
+                    // Draw footer
+                    const footerY = qrY + qrSize + 12;
+                    ctx.fillStyle = "#888888";
+                    ctx.font = "13px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.fillText(
+                      "Payment by Mayar × Xendit",
+                      canvasWidth / 2,
+                      footerY + 10,
+                    );
+                    ctx.fillStyle = "#bbbbbb";
+                    ctx.font = "11px sans-serif";
+                    ctx.fillText(
+                      "Scan QRIS ini untuk membayar",
+                      canvasWidth / 2,
+                      footerY + 28,
+                    );
+
+                    // Export
+                    const link = document.createElement("a");
+                    link.download = "QRIS-Tugasly.png";
+                    link.href = canvas.toDataURL("image/png");
+                    link.click();
+                  };
+
+                  qrImg.src = qrUrl;
+                };
+
+                logoImg.src = logoUrl;
+              }}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Download QRIS
+            </Button>
           </div>
         ) : (
           <iframe src={qrUrl} className="w-full h-96 border-0 rounded-lg" />
