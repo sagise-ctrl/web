@@ -303,6 +303,21 @@ function handleUpdatePayment(order_id, tipe, transaction_id) {
           });
         }
         sheet.getRange(i + 1, COLUMNS.STATUS).setValue("proses pengerjaan");
+        // Kalkulasi estimasi selesai otomatis
+        var jenis = data[i][COLUMNS.JENIS - 1];
+        var halaman = Number(data[i][COLUMNS.HALAMAN - 1]) || 1;
+        var tipeOrder = data[i][COLUMNS.TIPE_ORDER - 1] || "standar";
+        var jamPerHalaman = jenis === "PPT" ? 4.8 : 2.4;
+        var jamTotal = halaman * jamPerHalaman;
+        if (tipeOrder === "ekspres") jamTotal = Math.max(1, jamTotal - 24);
+        if (tipeOrder === "super ekspres")
+          jamTotal = Math.max(1, jamTotal - 48);
+        var estimasiSelesai = new Date(
+          new Date().getTime() + jamTotal * 60 * 60 * 1000,
+        );
+        sheet
+          .getRange(i + 1, COLUMNS.ESTIMASI_SELESAI)
+          .setValue(estimasiSelesai.toISOString());
         sheet
           .getRange(i + 1, COLUMNS.PAYMENT_DP_ID)
           .setValue(transaction_id || "");
@@ -366,7 +381,8 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
     );
     const file = sub.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    const fileUrl = file.getUrl();
+    const fileUrl =
+      "https://drive.google.com/uc?export=download&id=" + file.getId();
 
     const sheet = getSheet();
     const data = sheet.getDataRange().getValues();
@@ -448,11 +464,10 @@ function handleSubmitRevisi(order_id, catatan, files, estimasi_revisi) {
         .setValue(uploadedUrls.join(","));
       sheet.getRange(i + 1, COLUMNS.REVISI_COUNT).setValue(revisiCount + 1);
       sheet.getRange(i + 1, COLUMNS.STATUS).setValue("revisi");
-      if (estimasi_revisi) {
-        sheet
-          .getRange(i + 1, COLUMNS.ESTIMASI_REVISI)
-          .setValue(estimasi_revisi);
-      }
+      var estimasiRevisi = new Date(new Date().getTime() + 12 * 60 * 60 * 1000);
+      sheet
+        .getRange(i + 1, COLUMNS.ESTIMASI_REVISI)
+        .setValue(estimasiRevisi.toISOString());
       return jsonResponse({ success: true });
     }
   }

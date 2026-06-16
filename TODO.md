@@ -1,0 +1,3 @@
+- [ ] Update `google-apps-script/Code.gs`:
+  - [x] Perubahan 1: di `handleUpdatePayment` pada blok `if (tipe === "dp")`, tambah kalkulasi estimasi selesai otomatis tepat setelah `setValue("proses pengerjaan")`.
+  - [x] Perubahan 2: di `handleSubmitRevisi`, ganti blok `if (estimasi_revisi) { ... }` menjadi estimasi revisi fixed 12 jam dengan `.toISOString()`.

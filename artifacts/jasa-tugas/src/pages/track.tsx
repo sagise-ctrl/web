@@ -229,7 +229,7 @@ function TombolBayar({
     return (
       <div className="flex flex-col items-center gap-3 p-4 border rounded-xl bg-white">
         <p className="text-sm font-medium text-slate-700">
-          Transfer via e-wallet atau Scan QRIS untuk Membayar
+          Transfer Scan QRIS untuk Membayar
         </p>
         <p className="text-lg font-bold text-primary">
           {formatRupiah(nominal)}
@@ -711,7 +711,7 @@ export default function TrackPage() {
                   <p className="text-sm text-amber-700">
                     Pesanan Anda telah diverifikasi! Bayar DP{" "}
                     <strong>{formatRupiah(dp)}</strong> untuk memulai
-                    pengerjaan. Anda bisa bayar via QRIS atau e-wallet.
+                    pengerjaan. Anda bisa bayar via QRIS.
                   </p>
                   <TombolBayar
                     orderId={order.order_id}

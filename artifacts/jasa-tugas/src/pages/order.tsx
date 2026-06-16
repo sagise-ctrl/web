@@ -48,6 +48,7 @@ import {
   Upload,
   Paperclip,
   X,
+  CalendarClock,
 } from "lucide-react";
 
 // ─── Schemas ──────────────────────────────────────────────────
@@ -68,6 +69,25 @@ type Step1Values = z.infer<typeof step1Schema>;
 type Step2Values = z.infer<typeof step2Schema>;
 
 const WA_KEY = (wa: string) => `jt_wa_${wa}`;
+
+function hitungEstimasi(jenis: string, halaman: number, tipe: string): string {
+  const jamPerHalaman = jenis === "PPT" ? 4.8 : 2.4;
+  let jamTotal = halaman * jamPerHalaman;
+  if (tipe === "ekspres") jamTotal = Math.max(1, jamTotal - 24);
+  if (tipe === "super ekspres") jamTotal = Math.max(1, jamTotal - 48);
+  const estimasi = new Date(new Date().getTime() + jamTotal * 60 * 60 * 1000);
+  const tgl = estimasi.toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+  const jam = estimasi.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${tgl}, pukul ${jam}`;
+}
 
 function halamanOptions(jenis: JenisTugas) {
   if (jenis === "Makalah" || jenis === "Artikel") {
@@ -529,6 +549,23 @@ export default function OrderPage() {
                 </div>
               </div>
 
+              <div className="pt-2 border-t border-slate-200">
+                <div className="flex items-start gap-2 mt-2">
+                  <CalendarClock className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700">
+                      Estimasi Selesai
+                    </p>
+                    <p className="text-xs text-blue-600">
+                      {hitungEstimasi(jenis, halaman, tipe)}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      *Dihitung sejak pembayaran DP diterima
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <Button
                   variant="outline"
@@ -679,7 +716,29 @@ export default function OrderPage() {
                     </select>
                   </div>
 
+                  {selectedJenis && selectedHalaman && (
+                    <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                      <CalendarClock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-blue-800">
+                          Estimasi Selesai
+                        </p>
+                        <p className="text-sm text-blue-700 mt-0.5">
+                          {hitungEstimasi(
+                            selectedJenis,
+                            selectedHalaman,
+                            selectedTipe,
+                          )}
+                        </p>
+                        <p className="text-xs text-blue-500 mt-1">
+                          *Dihitung sejak pembayaran DP diterima
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Catatan */}
+
                   <FormField
                     control={form2.control}
                     name="note"
