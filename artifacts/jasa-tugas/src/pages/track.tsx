@@ -160,6 +160,7 @@ function TombolBayar({
   const [expiry, setExpiry] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
   const [qrString, setQrString] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
   async function handleBayar() {
     setLoading(true);
@@ -187,6 +188,7 @@ function TombolBayar({
 
       setQrUrl(data.payment_link);
       if (data.transaction_id) {
+        setQrLoading(true);
         fetch("/api/payment/qris", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -196,7 +198,10 @@ function TombolBayar({
           .then((d) => {
             if (d.success && d.qr_string) setQrString(d.qr_string);
           })
-          .catch(() => {}); // fallback ke iframe jika gagal
+          .catch(() => {})
+          .finally(() => setQrLoading(false));
+      } else {
+        setQrLoading(false);
       }
       setExpiry(null);
       setPolling(true);
@@ -229,7 +234,12 @@ function TombolBayar({
         <p className="text-lg font-bold text-primary">
           {formatRupiah(nominal)}
         </p>
-        {qrString ? (
+        {qrLoading ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-3">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            <p className="text-sm text-slate-500">Menyiapkan QRIS...</p>
+          </div>
+        ) : qrString ? (
           <div className="flex flex-col items-center gap-2">
             <div
               className="p-3 bg-white border rounded-xl shadow-sm"
