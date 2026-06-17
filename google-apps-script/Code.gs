@@ -307,11 +307,18 @@ function handleUpdatePayment(order_id, tipe, transaction_id) {
         var jenis = data[i][COLUMNS.JENIS - 1];
         var halaman = Number(data[i][COLUMNS.HALAMAN - 1]) || 1;
         var tipeOrder = data[i][COLUMNS.TIPE_ORDER - 1] || "standar";
-        var jamPerHalaman = jenis === "PPT" ? 4.8 : 2.4;
-        var jamTotal = halaman * jamPerHalaman;
-        if (tipeOrder === "ekspres") jamTotal = Math.max(1, jamTotal - 24);
-        if (tipeOrder === "super ekspres")
-          jamTotal = Math.max(1, jamTotal - 48);
+        var jamTotal = 0;
+        if (jenis === "Makalah" || jenis === "Artikel") {
+          jamTotal = 3 * 24 + (halaman - 10) * 2;
+        } else if (jenis === "PPT") {
+          jamTotal = 4 * 24 + (halaman - 5) * 2.5;
+        } else if (jenis === "Tugas Harian") {
+          jamTotal = 3 * 24 + (halaman - 2) * 3;
+        } else {
+          jamTotal = 3 * 24;
+        }
+        if (tipeOrder === "ekspres") jamTotal -= 24;
+        if (tipeOrder === "super ekspres") jamTotal -= 48;
         var estimasiSelesai = new Date(
           new Date().getTime() + jamTotal * 60 * 60 * 1000,
         );
