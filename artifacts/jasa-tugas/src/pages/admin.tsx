@@ -186,9 +186,14 @@ function UploadDialog({
 }
 
 // ─── Admin Action Column ───────────────────────────────────────
-
-    estimasiSelesai?: string,
-  ) => void;
+function AdminActionCell({
+  order,
+  onOpenVerifikasi,
+  onOpenUpload,
+  loading,
+}: {
+  order: Order;
+  onOpenVerifikasi: (order: Order) => void;
   onOpenUpload: (
     orderId: string,
     type: "hasil_pertama" | "hasil_revisi",
@@ -203,7 +208,7 @@ function UploadDialog({
         <p className="text-xs text-slate-500">
           Periksa detail pesanan, lalu verifikasi.
         </p>
-<Button
+        <Button
           size="sm"
           className="w-full"
           disabled={loading}
@@ -459,7 +464,7 @@ function AdminDashboard() {
     penyesuaianKeterangan: string;
   } | null>(null);
 
-async function handleAction(
+  async function handleAction(
     orderId: string,
     status: OrderStatus,
     estimasiSelesai?: string,
@@ -471,7 +476,7 @@ async function handleAction(
   ) {
     setLoadingOrderId(orderId);
     try {
-await updateOrder.mutateAsync({
+      await updateOrder.mutateAsync({
         orderId,
         status,
         estimasi_selesai: estimasiSelesai,
@@ -982,9 +987,8 @@ await updateOrder.mutateAsync({
                             >
                               {STATUS_LABEL[order.status] || order.status}
                             </Badge>
-<AdminActionCell
+                            <AdminActionCell
                               order={order}
-                              onAction={handleAction}
                               onOpenUpload={(orderId, type) =>
                                 setUploadDialog({ orderId, type })
                               }
