@@ -96,6 +96,24 @@ function generateOrderId() {
 }
 
 function rowToObject(row) {
+  const penyesuaianNominalRaw = row[COLUMNS.PENYESUAIAN_NOMINAL - 1];
+  const penyesuaianNominalParsed =
+    penyesuaianNominalRaw === "" || penyesuaianNominalRaw == null
+      ? null
+      : Number(penyesuaianNominalRaw);
+
+  const penyesuaianNominal =
+    penyesuaianNominalParsed === null || Number.isNaN(penyesuaianNominalParsed)
+      ? null
+      : penyesuaianNominalParsed;
+
+  const penyesuaianKeteranganRaw = row[COLUMNS.PENYESUAIAN_KETERANGAN - 1];
+  const penyesuaianKeterangan =
+    penyesuaianKeteranganRaw == null ||
+    String(penyesuaianKeteranganRaw).trim() === ""
+      ? null
+      : String(penyesuaianKeteranganRaw);
+
   return {
     order_id: row[0],
     nama: row[1],
@@ -120,6 +138,8 @@ function rowToObject(row) {
     snap_token: row[20] || "",
     payment_dp_id: row[21] || "",
     payment_final_id: row[22] || "",
+    penyesuaian_nominal: penyesuaianNominal,
+    penyesuaian_keterangan: penyesuaianKeterangan,
   };
 }
 
