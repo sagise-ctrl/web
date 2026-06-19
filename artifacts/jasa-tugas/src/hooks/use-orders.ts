@@ -41,6 +41,8 @@ export interface Order {
   estimasi_revisi?: string;
   payment_dp_id?: string;
   payment_final_id?: string;
+  penyesuaian_nominal?: number;
+  penyesuaian_keterangan?: string;
 }
 
 export interface WaCheckResult {
@@ -153,10 +155,20 @@ export function useUpdateOrder() {
       orderId,
       status,
       estimasi_selesai,
+      harga,
+      dp,
+      sisa_bayar,
+      penyesuaian_nominal,
+      penyesuaian_keterangan,
     }: {
       orderId: string;
       status: OrderStatus;
       estimasi_selesai?: string;
+      harga?: number;
+      dp?: number;
+      sisa_bayar?: number;
+      penyesuaian_nominal?: number;
+      penyesuaian_keterangan?: string;
     }) => {
       const res = await fetch(ADMIN_API_URL, {
         method: "POST",
@@ -167,6 +179,11 @@ export function useUpdateOrder() {
           order_id: orderId,
           status,
           estimasi_selesai,
+          harga,
+          dp,
+          sisa_bayar,
+          penyesuaian_nominal,
+          penyesuaian_keterangan,
         }),
       });
       const json = await res.json();

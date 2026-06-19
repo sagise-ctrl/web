@@ -38,6 +38,8 @@ const COLUMNS = {
   SNAP_TOKEN: 21,
   PAYMENT_DP_ID: 22,
   PAYMENT_FINAL_ID: 23,
+  javascriptPENYESUAIAN_NOMINAL: 24,
+  PENYESUAIAN_KETERANGAN: 25,
 };
 
 const VALID_STATUSES = [
@@ -144,6 +146,11 @@ function doPost(e) {
         body.order_id,
         body.status,
         body.estimasi_selesai,
+        body.harga,
+        body.dp,
+        body.sisa_bayar,
+        body.penyesuaian_nominal,
+        body.penyesuaian_keterangan,
       );
     if (body.action === "uploadFile")
       return handleUploadFile(
@@ -259,7 +266,16 @@ function handleGetAllOrders() {
 }
 
 // ─── Update Status (admin) ────────────────────────────────────
-function handleUpdateStatus(order_id, status, estimasi_selesai) {
+function handleUpdateStatus(
+  order_id,
+  status,
+  estimasi_selesai,
+  harga,
+  dp,
+  sisa_bayar,
+  penyesuaian_nominal,
+  penyesuaian_keterangan,
+) {
   if (!order_id || !status)
     return jsonResponse({ success: false, message: "Parameter kurang" });
   if (!VALID_STATUSES.includes(status))
@@ -276,6 +292,25 @@ function handleUpdateStatus(order_id, status, estimasi_selesai) {
         sheet
           .getRange(i + 1, COLUMNS.ESTIMASI_SELESAI)
           .setValue(estimasi_selesai);
+      }
+      if (harga !== undefined && harga !== null) {
+        sheet.getRange(i + 1, COLUMNS.HARGA).setValue(harga);
+      }
+      if (dp !== undefined && dp !== null) {
+        sheet.getRange(i + 1, COLUMNS.DP).setValue(dp);
+      }
+      if (sisa_bayar !== undefined && sisa_bayar !== null) {
+        sheet.getRange(i + 1, COLUMNS.SISA_BAYAR).setValue(sisa_bayar);
+      }
+      if (penyesuaian_nominal !== undefined && penyesuaian_nominal !== null) {
+        sheet
+          .getRange(i + 1, COLUMNS.PENYESUAIAN_NOMINAL)
+          .setValue(penyesuaian_nominal);
+      }
+      if (penyesuaian_keterangan) {
+        sheet
+          .getRange(i + 1, COLUMNS.PENYESUAIAN_KETERANGAN)
+          .setValue(penyesuaian_keterangan);
       }
       return jsonResponse({ success: true });
     }

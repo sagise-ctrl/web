@@ -186,16 +186,7 @@ function UploadDialog({
 }
 
 // ─── Admin Action Column ───────────────────────────────────────
-function AdminActionCell({
-  order,
-  onAction,
-  onOpenUpload,
-  loading,
-}: {
-  order: Order;
-  onAction: (
-    orderId: string,
-    status: OrderStatus,
+
     estimasiSelesai?: string,
   ) => void;
   onOpenUpload: (
@@ -212,11 +203,11 @@ function AdminActionCell({
         <p className="text-xs text-slate-500">
           Periksa detail pesanan, lalu verifikasi.
         </p>
-        <Button
+<Button
           size="sm"
           className="w-full"
           disabled={loading}
-          onClick={() => onAction(order_id, "menunggu pembayaran dp")}
+          onClick={() => onOpenVerifikasi(order)}
         >
           {loading ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -461,18 +452,34 @@ function AdminDashboard() {
     orderId: string;
     type: "hasil_pertama" | "hasil_revisi";
   } | null>(null);
+  const [verifikasiDialog, setVerifikasiDialog] = useState<{
+    order: Order;
+    step: 1 | 2;
+    penyesuaianNominal: string;
+    penyesuaianKeterangan: string;
+  } | null>(null);
 
-  async function handleAction(
+async function handleAction(
     orderId: string,
     status: OrderStatus,
     estimasiSelesai?: string,
+    harga?: number,
+    dp?: number,
+    sisa_bayar?: number,
+    penyesuaian_nominal?: number,
+    penyesuaian_keterangan?: string,
   ) {
     setLoadingOrderId(orderId);
     try {
-      await updateOrder.mutateAsync({
+await updateOrder.mutateAsync({
         orderId,
         status,
         estimasi_selesai: estimasiSelesai,
+        harga,
+        dp,
+        sisa_bayar,
+        penyesuaian_nominal,
+        penyesuaian_keterangan,
       });
       toast({
         title: "Status diperbarui",
@@ -497,6 +504,204 @@ function AdminDashboard() {
 
   return (
     <Layout>
+      {verifikasiDialog &&
+        (() => {
+          const ord = verifikasiDialog.order;
+          const hargaAsal = Number(ord.harga) || 0;
+          const nominal = Number(verifikasiDialog.penyesuaianNominal) || 0;
+          const hargaFinal = hargaAsal + nominal;
+          const dpFinal = Math.ceil(hargaFinal * 0.33);
+          const sisaFinal = Math.max(0, hargaFinal - dpFinal);
+
+          return (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+                {verifikasiDialog.step === 1 ? (
+                  <>
+                    <h3 className="font-semibold text-slate-800 text-lg">
+                      Verifikasi Order
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      Sesuaikan harga jika diperlukan, atau langsung lanjut
+                      tanpa perubahan.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-medium text-slate-600">
+                          Nominal Penyesuaian (+ tambah / - diskon)
+                        </label>
+                        <input
+                          type="number"
+                          className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                          placeholder="0 (kosongkan jika tidak ada penyesuaian)"
+                          value={verifikasiDialog.penyesuaianNominal}
+                          onChange={(e) =>
+                            setVerifikasiDialog((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    penyesuaianNominal: e.target.value,
+                                  }
+                                : null,
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600">
+                          Keterangan Penyesuaian (opsional)
+                        </label>
+                        <input
+                          type="text"
+                          className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                          placeholder="Contoh: biaya tambahan referensi jurnal"
+                          value={verifikasiDialog.penyesuaianKeterangan}
+                          onChange={(e) =>
+                            setVerifikasiDialog((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    penyesuaianKeterangan: e.target.value,
+                                  }
+                                : null,
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 rounded-lg p-3 space-y-1.5 text-sm">
+                      <div className="flex justify-between text-slate-600">
+                        <span>Harga asal</span>
+                        <span>{formatRupiah(hargaAsal)}</span>
+                      </div>
+                      {nominal !== 0 && (
+                        <div className="flex justify-between text-slate-600">
+                          <span>Penyesuaian</span>
+                          <span
+                            className={
+                              nominal > 0 ? "text-red-600" : "text-green-600"
+                            }
+                          >
+                            {nominal > 0 ? "+" : ""}
+                            {formatRupiah(nominal)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-bold text-slate-800 border-t border-slate-200 pt-1.5">
+                        <span>Harga Final</span>
+                        <span className="text-primary">
+                          {formatRupiah(hargaFinal)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>DP (33%)</span>
+                        <span>{formatRupiah(dpFinal)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Sisa bayar</span>
+                        <span>{formatRupiah(sisaFinal)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setVerifikasiDialog(null)}
+                      >
+                        Batal
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={() =>
+                          setVerifikasiDialog((prev) =>
+                            prev ? { ...prev, step: 2 } : null,
+                          )
+                        }
+                      >
+                        Lanjut
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="font-semibold text-slate-800 text-lg">
+                      Konfirmasi Verifikasi
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      Data berikut akan disimpan dan tidak bisa diubah kembali.
+                    </p>
+
+                    <div className="bg-slate-50 rounded-lg p-3 space-y-1.5 text-sm">
+                      <div className="flex justify-between text-slate-600">
+                        <span>Harga sebelum</span>
+                        <span>{formatRupiah(hargaAsal)}</span>
+                      </div>
+                      {nominal !== 0 && (
+                        <div className="flex justify-between text-slate-600">
+                          <span>Penyesuaian</span>
+                          <span
+                            className={
+                              nominal > 0 ? "text-red-600" : "text-green-600"
+                            }
+                          >
+                            {nominal > 0 ? "+" : ""}
+                            {formatRupiah(nominal)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-bold text-slate-800 border-t border-slate-200 pt-1.5">
+                        <span>Harga Final</span>
+                        <span className="text-primary">
+                          {formatRupiah(hargaFinal)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() =>
+                          setVerifikasiDialog((prev) =>
+                            prev ? { ...prev, step: 1 } : null,
+                          )
+                        }
+                      >
+                        Kembali
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        disabled={loadingOrderId === ord.order_id}
+                        onClick={() => {
+                          handleAction(
+                            ord.order_id,
+                            "menunggu pembayaran dp",
+                            undefined,
+                            hargaFinal,
+                            dpFinal,
+                            sisaFinal,
+                            nominal !== 0 ? nominal : undefined,
+                            verifikasiDialog.penyesuaianKeterangan || undefined,
+                          );
+                          setVerifikasiDialog(null);
+                        }}
+                      >
+                        {loadingOrderId === ord.order_id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          "Konfirmasi & Verifikasi"
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       {uploadDialog?.type === "hasil_pertama" && (
         <UploadDialog
           orderId={uploadDialog.orderId}
@@ -777,11 +982,19 @@ function AdminDashboard() {
                             >
                               {STATUS_LABEL[order.status] || order.status}
                             </Badge>
-                            <AdminActionCell
+<AdminActionCell
                               order={order}
                               onAction={handleAction}
                               onOpenUpload={(orderId, type) =>
                                 setUploadDialog({ orderId, type })
+                              }
+                              onOpenVerifikasi={(order) =>
+                                setVerifikasiDialog({
+                                  order,
+                                  step: 1,
+                                  penyesuaianNominal: "",
+                                  penyesuaianKeterangan: "",
+                                })
                               }
                               loading={loadingOrderId === order.order_id}
                             />

@@ -413,15 +413,6 @@ Potensi pengembangan:
 | K (11) | dp                  | Nominal DP (default Rp 10.000)               |
 | L (12) | sisa_bayar          | Sisa yang harus dibayar                      |
 | M (13) | file_tugas_url      | URL file tugas dari customer (tidak dipakai) |
-| N (14) | bukti_dp_url        | URL bukti transfer DP                        |
-| O (15) | bukti_pelunasan_url | URL bukti transfer pelunasan                 |
-| P (16) | hasil_url           | URL file hasil tugas dari admin              |
-| Q (17) | created_at          | Waktu order dibuat (ISO string)              |
-| R (18) | revisi_catatan      | Catatan revisi dari customer                 |
-| S (19) | revisi_file_urls    | URL file referensi revisi (dipisah koma)     |
-| T (20) | revisi_count        | Jumlah revisi yang sudah dipakai (maks 1)    |
-| U (21) | estimasi_selesai    | ISO string estimasi selesai order            |
-| V (22) | estimasi_revisi     | ISO string estimasi selesai revisi           |
 
 ---
 

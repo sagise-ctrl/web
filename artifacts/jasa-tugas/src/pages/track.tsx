@@ -713,6 +713,20 @@ export default function TrackPage() {
                     <strong>{formatRupiah(dp)}</strong> untuk memulai
                     pengerjaan. Anda bisa bayar via QRIS.
                   </p>
+                  {order.penyesuaian_nominal !== undefined &&
+                    order.penyesuaian_nominal !== 0 && (
+                      <div className="bg-amber-100 border border-amber-300 rounded-lg p-3 space-y-1">
+                        <p className="text-xs font-semibold text-amber-800">
+                          Harga telah disesuaikan oleh admin:
+                        </p>
+                        <p className="text-xs text-amber-700">
+                          {order.penyesuaian_nominal > 0 ? "+" : ""}
+                          {formatRupiah(order.penyesuaian_nominal)}{" "}
+                          {order.penyesuaian_keterangan &&
+                            `— ${order.penyesuaian_keterangan}`}
+                        </p>
+                      </div>
+                    )}
                   <TombolBayar
                     orderId={order.order_id}
                     tipe="dp"
