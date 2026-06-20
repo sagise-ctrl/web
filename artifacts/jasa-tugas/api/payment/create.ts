@@ -10,7 +10,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const { order_id, nama, wa, harga, jenis, tipe } = req.body;
-
+    console.log(
+      "PAYMENT_CREATE_BODY:",
+      JSON.stringify({ order_id, nama, wa, harga, jenis, tipe }),
+    );
     if (!order_id || !harga)
       return res.status(400).json({ error: "Data tidak lengkap" });
 
