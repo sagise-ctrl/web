@@ -146,12 +146,16 @@ function TombolBayar({
   tipe,
   label,
   nominal,
+  nama,
+  wa,
   onSuccess,
 }: {
   orderId: string;
   tipe: "dp" | "final";
   label: string;
   nominal: number;
+  nama: string;
+  wa: string;
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
@@ -171,8 +175,8 @@ function TombolBayar({
         body: JSON.stringify({
           order_id: orderId,
           tipe,
-          nama: "",
-          wa: "",
+          nama,
+          wa,
           harga: nominal,
           jenis: "",
         }),
@@ -740,6 +744,8 @@ export default function TrackPage() {
                     tipe="dp"
                     label="Bayar DP"
                     nominal={dp}
+                    nama={order.nama}
+                    wa={order.wa}
                     onSuccess={() => refetch()}
                   />
                 </CardContent>
@@ -793,6 +799,8 @@ export default function TrackPage() {
                     tipe="final"
                     label="Bayar Pelunasan"
                     nominal={sisa}
+                    nama={order.nama}
+                    wa={order.wa}
                     onSuccess={() => refetch()}
                   />
                 </CardContent>

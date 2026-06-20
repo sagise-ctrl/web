@@ -14,8 +14,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!order_id || !harga)
       return res.status(400).json({ error: "Data tidak lengkap" });
 
-    const email = `order@tugasly.my.id`;
-    const mobile = `08000000000`;
+    const email = `${(wa || "").replace(/^0/, "")}@tugasly.my.id`;
+    const mobile = wa;
 
     // Expired 24 jam dari sekarang
     const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();

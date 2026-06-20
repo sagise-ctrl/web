@@ -40,6 +40,7 @@ const COLUMNS = {
   PAYMENT_FINAL_ID: 23,
   PENYESUAIAN_NOMINAL: 24,
   PENYESUAIAN_KETERANGAN: 25,
+  CEK_FILE_AT: 26,
 };
 
 const VALID_STATUSES = [
@@ -591,6 +592,9 @@ function handleUpdatePaymentStatus(data) {
       } else if (data.tipe === "final") {
         sheet.getRange(i + 1, 23).setValue(data.mayar_transaction_id || "");
         sheet.getRange(i + 1, 8).setValue("cek file");
+        sheet
+          .getRange(i + 1, COLUMNS.CEK_FILE_AT)
+          .setValue(new Date().toISOString());
       }
       return jsonResponse({ success: true });
     }
@@ -624,4 +628,27 @@ function jsonResponse(data) {
   const out = ContentService.createTextOutput(JSON.stringify(data));
   out.setMimeType(ContentService.MimeType.JSON);
   return out;
+}
+
+// ─── Auto Close Orders ────────────────────────────────────────
+function autoCloseOrders() {
+  const sheet = getSheet();
+  const data = sheet.getDataRange().getValues();
+  const now = new Date();
+  const BATAS_HARI = 3;
+
+  for (let i = 1; i < data.length; i++) {
+    const status = data[i][COLUMNS.STATUS - 1];
+    const cekFileAt = data[i][COLUMNS.CEK_FILE_AT - 1];
+
+    if (status !== "cek file") continue;
+    if (!cekFileAt) continue;
+
+    const cekFileDate = new Date(cekFileAt);
+    const selisihHari = (now - cekFileDate) / (1000 * 60 * 60 * 24);
+
+    if (selisihHari >= BATAS_HARI) {
+      sheet.getRange(i + 1, COLUMNS.STATUS).setValue("selesai");
+    }
+  }
 }
