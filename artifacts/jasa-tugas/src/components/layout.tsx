@@ -51,7 +51,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </footer>
       <a
         className="fixed bottom-6 right-6 z-50"
-        href={`https://wa.me/6285875630641?text=${encodeURIComponent("Halo Tugasly, saya ingin bertanya")}`}
+        href={`https://wa.me/62881012465621?text=${encodeURIComponent("Halo Tugasly, saya ingin bertanya")}`}
         target="_blank"
         rel="noopener noreferrer"
       >
