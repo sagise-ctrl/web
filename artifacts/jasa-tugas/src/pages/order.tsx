@@ -660,7 +660,6 @@ export default function OrderPage() {
                       <option value="PPT">Presentasi (PPT)</option>
                       <option value="Artikel">Artikel Ilmiah</option>
                       <option value="Tugas Harian">Tugas Harian</option>
-                      <option value="Test">Test</option>
                     </select>
                     {form2.formState.errors.jenis && (
                       <p className="text-[0.8rem] font-medium text-destructive">
