@@ -566,6 +566,28 @@ function handleUpdatePaymentStatus(data) {
       if (data.tipe === "dp") {
         sheet.getRange(i + 1, 22).setValue(data.mayar_transaction_id || "");
         sheet.getRange(i + 1, 8).setValue("proses pengerjaan");
+        // Kalkulasi estimasi selesai otomatis
+        var jenis = rows[i][COLUMNS.JENIS - 1];
+        var halaman = Number(rows[i][COLUMNS.HALAMAN - 1]) || 1;
+        var tipeOrder = rows[i][COLUMNS.TIPE_ORDER - 1] || "standar";
+        var jamTotal = 0;
+        if (jenis === "Makalah" || jenis === "Artikel") {
+          jamTotal = 3 * 24 + (halaman - 10) * 2;
+        } else if (jenis === "PPT") {
+          jamTotal = 4 * 24 + (halaman - 5) * 2.5;
+        } else if (jenis === "Tugas Harian") {
+          jamTotal = 3 * 24 + (halaman - 2) * 3;
+        } else {
+          jamTotal = 3 * 24;
+        }
+        if (tipeOrder === "ekspres") jamTotal -= 24;
+        if (tipeOrder === "super ekspres") jamTotal -= 48;
+        var estimasiSelesai = new Date(
+          new Date().getTime() + jamTotal * 60 * 60 * 1000,
+        );
+        sheet
+          .getRange(i + 1, COLUMNS.ESTIMASI_SELESAI)
+          .setValue(estimasiSelesai.toISOString());
       } else if (data.tipe === "final") {
         sheet.getRange(i + 1, 23).setValue(data.mayar_transaction_id || "");
         sheet.getRange(i + 1, 8).setValue("cek file");

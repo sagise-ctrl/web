@@ -1,441 +1,425 @@
 # Jasa Tugas — Dokumentasi Lengkap Proyek
 
-Platform pemesanan jasa tugas akademik untuk mahasiswa Indonesia.
-Customer dapat memesan, membayar, dan memantau status pengerjaan tugasnya secara online.
-Admin mengelola seluruh alur order dari satu dashboard terpusat.
+Dokumentasi ini menjelaskan end-to-end proses pemesanan jasa tugas akademik untuk customer, termasuk detail status order, struktur data di Google Sheets, aturan transisi, hook & API action yang dipanggil, serta fitur tiap halaman.
 
 ---
 
-## Daftar Isi
+## 1) Gambaran Umum Project
 
-1. [Gambaran Umum](#gambaran-umum)
-2. [Tech Stack](#tech-stack)
-3. [Arsitektur Sistem](#arsitektur-sistem)
-4. [Struktur File Lengkap](#struktur-file-lengkap)
-5. [Konfigurasi Penting](#konfigurasi-penting)
-6. [Alur Order Lengkap](#alur-order-lengkap)
-7. [Logika Harga](#logika-harga)
-8. [File yang Bisa Dikembangkan](#file-yang-bisa-dikembangkan)
-9. [Google Apps Script — Setup & Kolom Sheets](#google-apps-script)
-10. [Menjalankan Proyek](#menjalankan-proyek)
+### Nama Project
 
----
+**Jasa Tugas**
 
-## Gambaran Umum
+### Tujuan
 
-Jasa Tugas adalah web app full-stack ringan tanpa server backend tradisional.
-Frontend dibangun dengan React + Vite, backend menggunakan Google Apps Script (GAS)
-yang terhubung ke Google Sheets sebagai database.
+Menyediakan platform pemesanan dan pengerjaan tugas akademik dengan alur status yang transparan bagi customer, serta kontrol terpusat oleh admin.
 
-Fitur utama:
+### Tech Stack
 
-- Multi-step order form (data diri → detail tugas → konfirmasi)
-- Tiga jenis tugas: Makalah, PPT, Artikel, Tugas Harian
-- Tiga tipe layanan: Standar, Ekspres, Super Ekspres
-- Upload bukti pembayaran (DP & pelunasan) langsung dari browser
-- Pelacakan status real-time (auto-refresh setiap 15 detik untuk customer, 20 detik untuk admin)
-- Revisi gratis 1 kali dengan upload catatan & file referensi
-- Estimasi selesai otomatis berdasarkan tipe layanan
-- Catatan order & revisi bisa diunduh sebagai file .txt di dashboard admin
-- Dashboard admin dengan autentikasi password
+| Layer                          | Teknologi                                                  |
+| ------------------------------ | ---------------------------------------------------------- |
+| Frontend                       | React 18 + TypeScript (Vite)                               |
+| UI                             | Tailwind CSS v4 + shadcn/ui (Radix UI)                     |
+| Form & Validasi                | react-hook-form + Zod                                      |
+| Data Fetching                  | TanStack React Query v5                                    |
+| Routing                        | wouter                                                     |
+| Backend                        | Google Apps Script (GAS) sebagai Web App                   |
+| Database                       | Google Sheets                                              |
+| File Storage                   | Google Drive                                               |
+| Proxy/Payment API (serverless) | Vercel Serverless Functions (proxy, webhook, payment link) |
 
 ---
 
-## Tech Stack
+## 2) Alur Lengkap dari User sampai Selesai (Step-by-step)
 
-| Layer            | Teknologi                     |
-| ---------------- | ----------------------------- |
-| Framework UI     | React 18 + TypeScript         |
-| Build Tool       | Vite 5                        |
-| Styling          | Tailwind CSS v4               |
-| Komponen UI      | shadcn/ui (berbasis Radix UI) |
-| Form & Validasi  | react-hook-form + Zod         |
-| Data Fetching    | TanStack React Query v5       |
-| Routing          | Wouter                        |
-| Ikon             | Lucide React                  |
-| Backend          | Google Apps Script (GAS)      |
-| Database         | Google Sheets                 |
-| Penyimpanan File | Google Drive                  |
+Semua status order tersimpan di Google Sheets kolom `status`.
 
----
+### Daftar status order (internal)
 
-## Arsitektur Sistem
+| Status (`status`)        | Label UI (kurang lebih) | Keterangan singkat                                               |
+| ------------------------ | ----------------------- | ---------------------------------------------------------------- |
+| `verifikasi tugas`       | Menunggu Verifikasi     | Order dibuat, menunggu admin verifikasi                          |
+| `menunggu pembayaran dp` | Menunggu Pembayaran DP  | Menunggu pembayaran DP (33%)                                     |
+| `proses pengerjaan`      | Sedang Dikerjakan       | DP sudah paid, admin mengerjakan                                 |
+| `menunggu pelunasan`     | Menunggu Pelunasan      | Hasil pertama sudah diupload, menunggu pelunasan                 |
+| `pelunasan diterima`     | Pelunasan Diterima      | Pelunasan paid (gateway webhook), file siap menuju cek           |
+| `cek file`               | Cek File                | Customer mengunduh & konfirmasi / ajukan revisi                  |
+| `revisi`                 | Sedang Direvisi         | Customer mengajukan revisi (maks 1x gratis), admin upload revisi |
+| `selesai`                | Selesai                 | Final state                                                      |
 
-```
-Browser (React + Vite)
-        │
-        │  HTTP fetch (GET/POST)
-        ▼
-Google Apps Script Web App URL
-        │
-        ├── Baca/tulis data → Google Sheets (database)
-        └── Upload file     → Google Drive (penyimpanan)
-```
+### Aturan transisi status: siapa memicu apa
 
-Tidak ada server Node.js atau database terpisah.
-Semua data tersimpan di Google Sheets, semua file di Google Drive.
+> Rujukan implementasi utama ada di `google-apps-script/Code.gs` dan UI di `src/pages/*`.
 
----
+#### (A) Customer: membuat order
 
-## Struktur File Lengkap
+1. Customer membuka halaman **`/order`**.
+2. Customer mengisi data diri & detail tugas.
+3. Customer mengirim order.
 
-```
-artifacts/jasa-tugas/
-├── src/
-│   ├── pages/
-│   │   ├── home.tsx          — Halaman beranda / landing page
-│   │   ├── order.tsx         — Form pemesanan multi-step (3 langkah)
-│   │   ├── track.tsx         — Halaman pelacakan status order customer
-│   │   ├── admin.tsx         — Dashboard admin (login + kelola order)
-│   │   └── not-found.tsx     — Halaman 404
-│   │
-│   ├── hooks/
-│   │   └── use-orders.ts     — Semua API call ke GAS + logika harga + helper estimasi
-│   │
-│   ├── components/
-│   │   ├── layout.tsx        — Layout utama (header + footer + container)
-│   │   └── ui/               — Komponen shadcn/ui (button, card, input, dll.)
-│   │       ├── select.tsx    — Select dropdown (sudah di-patch untuk Tailwind v4)
-│   │       └── ...           — 30+ komponen UI lainnya
-│   │
-│   ├── main.tsx              — Entry point React, setup QueryClient
-│   ├── App.tsx               — Router utama (Wouter)
-│   └── index.css             — Tailwind v4 config & CSS variables
-│
-├── public/
-│   └── qris.png              — Gambar QRIS untuk pembayaran (perlu diupload manual)
-│
-├── index.html                — HTML shell
-├── vite.config.ts            — Konfigurasi Vite (port, base path, alias)
-├── tsconfig.json             — Konfigurasi TypeScript
-├── package.json              — Dependencies
-└── components.json           — Konfigurasi shadcn/ui
+**Request frontend → GAS**
 
-google-apps-script/
-└── Code.gs                   — Seluruh backend (harus di-deploy ke GAS)
-```
+- `useCreateOrder()` memanggil serverless proxy publik (`/api/proxy`), lalu menuju GAS:
+  - `POST` dengan payload: `{ action: 'createOrder', data }`
 
----
+**Backend (GAS) menyimpan order**
 
-## Konfigurasi Penting
+- Membuat `order_id` baru.
+- Menghitung `dp` dan `sisa_bayar` dari `harga`.
+- Menulis baris baru ke Sheets dengan `status = 'verifikasi tugas'`.
 
-### 1. Password Admin
+**Transisi**
 
-**File:** `artifacts/jasa-tugas/src/pages/admin.tsx`
-**Baris:** Cari `if (password === "admin123")`
+- (awal) → `verifikasi tugas`
 
-```tsx
-// Ganti "admin123" dengan password yang diinginkan
-if (password === "admin123") setIsAuthenticated(true);
-```
+**Dipicu oleh:** Customer → GAS (`createOrder`)
 
-### 2. URL Google Apps Script (Backend)
+#### (B) Admin: verifikasi order dan meminta DP
 
-**File:** Environment variable di Replit — bukan di kode langsung
+1. Admin login ke halaman **`/admin`**.
+2. Admin mencari order status `verifikasi tugas`.
+3. Admin menekan tombol **“Verifikasi & Minta DP”**.
 
-Nama variabel: `VITE_GAS_URL`
+**Request frontend (admin) → GAS (admin proxy)**
 
-Cara ubah:
+- `useUpdateOrder()` memanggil `/api/admin/proxy` dengan action:
+  - `POST` `{ action: 'updateStatus', order_id, status, estimasi_selesai }`
 
-- Di Replit: buka tab **Secrets** (kunci/gembok) → edit nilai `VITE_GAS_URL`
-- Isi dengan URL deployment GAS (format: `https://script.google.com/macros/s/XXXXXXX/exec`)
+**Backend (GAS)**
 
-Digunakan di: `artifacts/jasa-tugas/src/hooks/use-orders.ts` baris:
+- `handleUpdateStatus(order_id, status, estimasi_selesai)`
+- Memvalidasi `status` terhadap `VALID_STATUSES`.
+- Jika status yang di-set adalah `proses pengerjaan`, dan ada `estimasi_selesai`, maka kolom estimasi diset.
 
-```ts
-const GAS_URL = import.meta.env.VITE_GAS_URL;
-```
+**Transisi**
 
-### 3. ID Google Spreadsheet
+- `verifikasi tugas` → `menunggu pembayaran dp`
 
-**File:** `google-apps-script/Code.gs`
-**Baris pertama konstanta:**
+**Dipicu oleh:** Admin → GAS (`updateStatus`)
 
-```js
-const SPREADSHEET_ID = "1M46VQj9eGn4_Pn_bg0u4IAcuqnaAekEAHo-yeVXV9Eo";
-```
+#### (C) Customer: bayar DP (QRIS otomatis via Mayar)
 
-Ganti dengan ID spreadsheet Google Sheets milik Anda
-(ambil dari URL sheets: `https://docs.google.com/spreadsheets/d/ID_INI/edit`)
+1. Customer membuka **`/track?id=ORDER_ID`**.
+2. Jika `order.status === 'menunggu pembayaran dp'`, UI menampilkan tombol **“Bayar DP”**.
+3. Tombol memanggil endpoint pembayaran QRIS via serverless (Mayar otomatis).
+4. Gateway Mayar mengembalikan event pembayaran via webhook serverless.
+5. Serverless webhook meneruskan update ke GAS.
 
-### 4. Nama Sheet
+**Request serverless webhook → GAS**
 
-**File:** `google-apps-script/Code.gs`
+- `POST` `{ action: 'updatePaymentStatus', data: { order_id, tipe, mayar_transaction_id } }`
 
-```js
-const SHEET_NAME = "Orders";
-```
+**Catatan:** Di `google-apps-script/Code.gs`, handler `doPost` memproses `updatePaymentStatus` melalui `handleUpdatePaymentStatus`.
 
-### 5. Gambar QRIS Pembayaran
+**Transisi**
 
-**File:** `artifacts/jasa-tugas/public/qris.png`
+- `menunggu pembayaran dp` → `proses pengerjaan`
 
-Upload file gambar QRIS ke folder `public/` dengan nama `qris.png`.
-Tampilkan di `track.tsx` dengan mengubah placeholder:
+**Dipicu oleh:** Webhook Mayar (serverless) → GAS (`updatePaymentStatus`)
 
-```tsx
-// Cari: <CreditCard className="w-10 h-10 mx-auto text-slate-400 mb-2" />
-// Ganti dengan: <img src="/qris.png" alt="QRIS" className="mx-auto max-w-[200px]" />
-```
+> Selain itu, saat `tipe === 'dp'`, GAS menghitung `estimasi_selesai` berdasarkan `jenis`, `halaman`, `tipe_order` lalu mengisi:
 
-### 6. Interval Auto-Refresh
+- `estimasi_selesai`
+- `payment_dp_id`
+- `snap_token` di-clear
 
-**File:** `artifacts/jasa-tugas/src/hooks/use-orders.ts`
+#### (D) Admin: upload hasil pertama (minta pelunasan)
 
-```ts
-// Halaman tracking customer — refresh setiap 15 detik
-refetchInterval: 15000,
+1. Ketika status `proses pengerjaan`, admin mengerjakan tugas.
+2. Setelah tugas selesai (hasil pertama), admin membuka tombol **“Upload Hasil & Minta Pelunasan”**.
+3. Admin upload file.
 
-// Dashboard admin — refresh setiap 20 detik
-refetchInterval: 20000,
-```
+**Request frontend (admin) → GAS**
 
-Ubah angka (dalam milidetik) sesuai kebutuhan. Nilai lebih kecil = lebih cepat tapi lebih banyak request ke GAS.
+- `useUploadBukti()` dengan `tipe: 'hasil'`.
+- `POST` action: `uploadFile`.
 
-### 7. Biaya Layanan Ekspres
+**Backend (GAS upload)**
 
-**File:** `artifacts/jasa-tugas/src/hooks/use-orders.ts`
+- Menulis URL ke kolom `hasil_url`.
+- Jika `currentStatus === 'proses pengerjaan'` maka mengubah status menjadi `menunggu pelunasan`.
 
-```ts
-export function biayaTambahan(tipeOrder: TipeOrder): number {
-  if (tipeOrder === "super ekspres") return 15000; // ubah nominal
-  if (tipeOrder === "ekspres") return 7000; // ubah nominal
-  return 0;
-}
-```
+**Transisi**
 
-### 8. Harga Dasar per Jenis Tugas
+- `proses pengerjaan` → `menunggu pelunasan`
 
-**File:** `artifacts/jasa-tugas/src/hooks/use-orders.ts`
+**Dipicu oleh:** Admin → GAS (`uploadFile`)
 
-```ts
-export function hitungHarga(jenis: JenisTugas, halaman: number): number {
-  if (jenis === "Makalah" || jenis === "Artikel") {
-    const tier = Math.max(0, Math.ceil((halaman - 10) / 5));
-    return 30000 + tier * 5000; // harga dasar 30rb, naik 5rb tiap 5 hal
-  }
-  if (jenis === "PPT") {
-    return 20000 + Math.max(0, halaman - 5) * 3000; // dasar 20rb, +3rb/slide
-  }
-  if (jenis === "Tugas Harian") {
-    return 20000 + Math.max(0, halaman - 2) * 4000; // dasar 20rb, +4rb/lembar
-  }
-}
-```
+#### (E) Customer: bayar pelunasan (final) (QRIS otomatis via Mayar)
 
-### 9. Estimasi Hari Selesai per Tipe Layanan
+1. Customer melihat status `menunggu pelunasan` pada **`/track`**.
+2. Customer menekan tombol **“Bayar Pelunasan”**.
+3. Gateway Mayar memproses pembayaran via QRIS.
+4. Pembayaran sukses → webhook serverless → update ke GAS.
 
-**File:** `artifacts/jasa-tugas/src/hooks/use-orders.ts`
+**Transisi**
 
-```ts
-export function hitungEstimasiSelesai(tipeOrder, fromDate = new Date()): Date {
-  const days = tipeOrder === "super ekspres" ? 1   // Super Ekspres: +1 hari
-             : tipeOrder === "ekspres"       ? 2   // Ekspres: +2 hari
-             :                                4;   // Standar: +4 hari
-  ...
-}
-```
+- `menunggu pelunasan` → `cek file`
 
-### 10. Batas Karakter Catatan
+**Dipicu oleh:** Webhook Mayar → GAS (`updatePaymentStatus`)
 
-**File:** `artifacts/jasa-tugas/src/pages/order.tsx` — catatan order (saat ini: 1000)
-**File:** `artifacts/jasa-tugas/src/pages/track.tsx` — catatan revisi (saat ini: 1000)
+#### (F) Customer: cek file, lalu konfirmasi selesai atau revisi
+
+Pada status `cek file`, customer dapat:
+
+- Unduh `hasil_url`.
+- Menekan tombol **“Selesai, Terima Hasil”**.
+- Menekan tombol **“Ajukan Revisi (Gratis 1x)”**.
+
+**Transisi 1 (selesai)**
+
+- `cek file` → `selesai`
+
+**Dipicu oleh:** Customer → GAS (`markSelesai`)
+
+**Transisi 2 (revisi)**
+
+- `cek file` → `revisi`
+
+**Dipicu oleh:** Customer → GAS (`submitRevisi`)
+
+Pada `submitRevisi`:
+
+- Validasi `revisi_count < 1` (maks 1 kali gratis)
+- Menulis `revisi_catatan`, `revisi_file_urls`
+- Menulis `revisi_count += 1`
+- Menulis `estimasi_revisi = now + 12 jam`
+
+#### (G) Admin: upload hasil revisi
+
+Saat status `revisi`, admin upload hasil revisi melalui tombol **“Upload Hasil Revisi”**.
+
+**Transisi**
+
+- `revisi` → `cek file`
+
+**Dipicu oleh:** Admin → GAS (`uploadFile` tipe `hasil`)
+
+> Jika status saat upload adalah `revisi`, GAS mengubah status menjadi `cek file`.
 
 ---
 
-## Alur Order Lengkap
+## 3) Struktur File & Folder (plus relasi panggilan)
 
-```
-Customer pesan
-      │
-      ▼
-[verifikasi tugas]        ← admin cek detail, klik "Verifikasi & Minta DP"
-      │
-      ▼
-[pembayaran awal]         ← customer upload bukti DP (Rp 10.000)
-      │
-      ▼
-[verifikasi pembayaran awal] ← admin cek bukti DP, klik "DP OK, Mulai Kerjakan"
-      │                         → estimasi_selesai dihitung & disimpan
-      ▼
-[proses pengerjaan]       ← admin mengerjakan tugas
-      │
-      ▼ (admin upload file hasil)
-[menunggu pelunasan]      ← customer upload bukti pelunasan (sisa bayar)
-      │
-      ▼
-[menunggu verifikasi]     ← admin cek bukti pelunasan, aktifkan file
-      │
-      ▼
-[cek file]                ← customer unduh & cek file hasil
-      │
-      ├──[Selesai]        ← customer konfirmasi → status: selesai
-      │
-      └──[Revisi]         ← customer ajukan revisi (1x gratis)
-                              → estimasi_revisi = sekarang + 12 jam
-                    │
-                    ▼
-              [revisi]    ← admin upload hasil revisi → langsung selesai
-```
+### 3.1 Frontend (React/Vite)
 
----
+**Root:** `artifacts/jasa-tugas/`
 
-## Logika Harga
+| Path                           | Fungsi                                              |
+| ------------------------------ | --------------------------------------------------- |
+| `src/main.tsx`                 | Entry point + QueryClientProvider                   |
+| `src/App.tsx`                  | Router (`wouter`)                                   |
+| `src/pages/home.tsx`           | Halaman landing                                     |
+| `src/pages/order.tsx`          | Form order multi-step + pricing preview             |
+| `src/pages/track.tsx`          | Tracking status + pembayaran + revisi + unduh hasil |
+| `src/pages/admin.tsx`          | Login admin + dashboard daftar order                |
+| `src/pages/payment-finish.tsx` | (jika dipakai) halaman selesai payment              |
+| `src/pages/terms.tsx`          | halaman Terms                                       |
+| `src/pages/not-found.tsx`      | 404                                                 |
+| `src/hooks/use-orders.ts`      | **Core**: hook API + pricing/estimasi helper        |
+| `src/components/layout.tsx`    | Layout UI                                           |
 
-| Jenis             | Halaman/Slide/Lembar | Formula                                 |
-| ----------------- | -------------------- | --------------------------------------- |
-| Makalah & Artikel | mulai 10             | Rp 30.000 + (ceil((n-10)/5) × Rp 5.000) |
-| PPT               | mulai 5 slide        | Rp 20.000 + ((n-5) × Rp 3.000)          |
-| Tugas Harian      | mulai 2 lembar       | Rp 20.000 + ((n-2) × Rp 4.000)          |
+### 3.2 GAS Backend
 
-Biaya tambahan tipe layanan:
+**Root:** `google-apps-script/Code.gs`
 
-- Standar: +Rp 0
-- Ekspres: +Rp 7.000
-- Super Ekspres: +Rp 15.000
+Berisi semua handler:
 
-DP default: Rp 10.000 (ubah di `Code.gs` → `handleCreateOrder`, baris `const dp = 10000`)
+- `doGet(e)`
+- `doPost(e)`
+- fungsi-fungsi `handleCreateOrder`, `handleUpdateStatus`, `handleUploadFile`, dll.
+
+### 3.3 Relasi pemanggilan utama (siapa memanggil siapa)
+
+| Caller             | Target              | Action/Endpoint                                         |
+| ------------------ | ------------------- | ------------------------------------------------------- |
+| `order.tsx`        | `useCreateOrder()`  | Serverless proxy → GAS `doPost` `action=createOrder`    |
+| `order.tsx`        | `useCheckWa()`      | Proxy → GAS `doGet` `action=checkWa`                    |
+| `admin.tsx`        | `useUpdateOrder()`  | Admin proxy → GAS `doPost` `action=updateStatus`        |
+| `admin.tsx`        | `useUploadBukti()`  | Admin/Customer proxy → GAS `doPost` `action=uploadFile` |
+| `track.tsx`        | `useGetOrder()`     | Proxy → GAS `doGet` `action=getOrder`                   |
+| `track.tsx`        | `useMarkSelesai()`  | Proxy → GAS `doPost` `action=markSelesai`               |
+| `track.tsx`        | `useSubmitRevisi()` | Proxy → GAS `doPost` `action=submitRevisi`              |
+| serverless webhook | GAS `doPost`        | `action=updatePaymentStatus`                            |
 
 ---
 
-## File yang Bisa Dikembangkan
+## 4) Struktur Data
 
-### Prioritas Tinggi (paling bermanfaat untuk dikembangkan)
+### 4.1 Field `Order` (Frontend type)
 
-#### `artifacts/jasa-tugas/src/pages/admin.tsx`
+Sumber: `artifacts/jasa-tugas/src/hooks/use-orders.ts`
 
-Saat ini hanya punya autentikasi password sederhana dan tabel order.
-Potensi pengembangan:
+| Field               | Tipe data     | Keterangan                            |
+| ------------------- | ------------- | ------------------------------------- |
+| `order_id`          | `string`      | ID unik order (`ORD-...`)             |
+| `nama`              | `string`      | Nama customer                         |
+| `wa`                | `string`      | WhatsApp customer                     |
+| `jenis`             | `JenisTugas`  | Makalah/PPT/Artikel/Tugas Harian/Test |
+| `halaman`           | `number`      | Jumlah halaman/slide/lembar           |
+| `deadline?`         | `string`      | opsional                              |
+| `note`              | `string`      | Catatan order                         |
+| `status`            | `OrderStatus` | status internal                       |
+| `tipe_order?`       | `TipeOrder`   | standar/ekspres/super ekspres         |
+| `harga?`            | `number`      | total harga                           |
+| `dp?`               | `number`      | nominal DP                            |
+| `sisa_bayar?`       | `number`      | sisa bayar                            |
+| `file_tugas_url?`   | `string`      | URL file pendukung (opsional)         |
+| `hasil_url?`        | `string`      | URL hasil tugas admin                 |
+| `created_at?`       | `string`      | ISO time                              |
+| `revisi_catatan?`   | `string`      | catatan revisi                        |
+| `revisi_file_urls?` | `string`      | URL revisi (dipisah koma)             |
+| `revisi_count?`     | `number`      | jumlah revisi dipakai (maks 1 gratis) |
+| `estimasi_selesai?` | `string`      | ISO estimasi selesai                  |
+| `estimasi_revisi?`  | `string`      | ISO estimasi revisi selesai           |
+| `payment_dp_id?`    | `string`      | transaksi DP                          |
+| `payment_final_id?` | `string`      | transaksi pelunasan                   |
 
-- Tambah filter/pencarian order berdasarkan status, nama, atau tanggal
-- Tambah fitur export seluruh data order ke CSV/Excel
-- Notifikasi browser (Web Push Notifications) saat ada order baru
-- Tampilan ringkasan pendapatan (total harga, total DP masuk, dll.)
-- Histori log perubahan status per order
+### 4.2 Struktur Kolom Google Sheets (Orders)
 
-#### `artifacts/jasa-tugas/src/pages/track.tsx`
+Sumber: `google-apps-script/Code.gs` (`COLUMNS` + `appendRow`).
 
-Saat ini hanya bisa dicari manual dengan Order ID.
-Potensi pengembangan:
+Urutan kolom sesuai `COLUMNS` (23 kolom A sampai W). Tidak ada `bukti_dp_url` dan `bukti_pelunasan_url`.
 
-- Simpan Order ID ke localStorage agar customer tidak perlu ingat
-- Kirim notifikasi WhatsApp otomatis ke customer saat status berubah (via WhatsApp API)
-- Tampilkan riwayat lengkap perubahan status dengan timestamp
-- Tombol "Bagikan status" menghasilkan link langsung ke halaman tracking
-
-#### `artifacts/jasa-tugas/src/pages/order.tsx`
-
-Potensi pengembangan:
-
-- Tambah step 0: pilih dari template tugas populer
-- Tambah upload file referensi saat order awal (bukan hanya saat revisi)
-- Integrasi kalender untuk memilih deadline sendiri
-- Simpan draft order di localStorage jika customer tutup browser
-
-#### `artifacts/jasa-tugas/src/hooks/use-orders.ts`
-
-File sentral semua logika bisnis.
-Potensi pengembangan:
-
-- Tambah hook `useOrderHistory` untuk riwayat semua order per nomor WA
-- Tambah validasi duplikat order (cek apakah WA sudah ada order aktif)
-- Tambah optimistic update agar UI terasa lebih responsif
-
-### Prioritas Menengah
-
-#### `artifacts/jasa-tugas/src/components/layout.tsx`
-
-Potensi pengembangan:
-
-- Tambah navigasi mobile (hamburger menu)
-- Tambah nomor WA admin yang bisa diklik langsung (wa.me link)
-- Tambah mode gelap (dark mode)
-
-#### `artifacts/jasa-tugas/src/pages/home.tsx`
-
-Potensi pengembangan:
-
-- Tambah bagian testimoni customer
-- Tambah FAQ (pertanyaan yang sering ditanyakan)
-- Tambah portofolio contoh hasil tugas
-- Tambah banner promo / diskon
-
-### Infrastruktur & Backend
-
-#### `google-apps-script/Code.gs`
-
-Potensi pengembangan:
-
-- Kirim email otomatis ke customer saat status berubah (GAS punya `MailApp.sendEmail()`)
-- Tambah endpoint statistik (total order per hari, pendapatan per bulan)
-- Tambah validasi lebih ketat (cek nomor WA format, cek duplikat order ID)
-- Tambah fungsi backup otomatis ke sheet terpisah
-- Rate limiting sederhana untuk mencegah spam order
-
-#### `artifacts/jasa-tugas/src/index.css`
-
-Potensi pengembangan:
-
-- Ganti palet warna utama (ubah nilai `--primary` di `:root`)
-- Tambah custom font Google Fonts
-- Tambah animasi transisi halaman
+| Urutan | Kolom | Field            |
+| -----: | :---: | ---------------- |
+|      1 |   A   | order_id         |
+|      2 |   B   | nama             |
+|      3 |   C   | wa               |
+|      4 |   D   | jenis            |
+|      5 |   E   | halaman          |
+|      6 |   F   | deadline         |
+|      7 |   G   | note             |
+|      8 |   H   | status           |
+|      9 |   I   | tipe_order       |
+|     10 |   J   | harga            |
+|     11 |   K   | dp               |
+|     12 |   L   | sisa_bayar       |
+|     13 |   M   | file_tugas_url   |
+|     14 |   N   | hasil_url        |
+|     15 |   O   | created_at       |
+|     16 |   P   | revisi_catatan   |
+|     17 |   Q   | revisi_file_urls |
+|     18 |   R   | revisi_count     |
+|     19 |   S   | estimasi_selesai |
+|     20 |   T   | estimasi_revisi  |
+|     21 |   U   | snap_token       |
+|     22 |   V   | payment_dp_id    |
+|     23 |   W   | payment_final_id |
 
 ---
 
-## Google Apps Script — Setup & Kolom Sheets
+## 5) Logika Bisnis Penting
 
-### Cara Deploy Ulang Setelah Edit Code.gs
+### 5.1 Rumus kalkulasi harga & biaya tambahan
 
-1. Buka [script.google.com](https://script.google.com)
-2. Buat project baru atau buka project yang sudah ada
-3. Copy-paste seluruh isi `google-apps-script/Code.gs`
-4. Klik **Deploy → New Deployment**
-5. Tipe: **Web App**
-6. Execute as: **Me**
-7. Who has access: **Anyone**
-8. Klik **Deploy** → copy URL yang muncul
-9. Paste URL tersebut ke Replit Secrets sebagai `VITE_GAS_URL`
+Sumber: `artifacts/jasa-tugas/src/hooks/use-orders.ts`
 
-### Struktur Kolom Google Sheets (Sheet: "Orders")
+#### `hitungHarga(jenis, halaman)`
 
-| Kolom  | Nama                | Keterangan                                   |
-| ------ | ------------------- | -------------------------------------------- |
-| A (1)  | order_id            | ID unik format ORD-timestamp-random          |
-| B (2)  | nama                | Nama lengkap customer                        |
-| C (3)  | wa                  | Nomor WhatsApp customer                      |
-| D (4)  | jenis               | Makalah / PPT / Artikel / Tugas Harian       |
-| E (5)  | halaman             | Jumlah halaman/slide/lembar                  |
-| F (6)  | deadline            | Deadline dari customer (opsional)            |
-| G (7)  | note                | Catatan order dari customer (maks 1000 kar.) |
-| H (8)  | status              | Status order saat ini                        |
-| I (9)  | tipe_order          | standar / ekspres / super ekspres            |
-| J (10) | harga               | Total harga                                  |
-| K (11) | dp                  | Nominal DP (default Rp 10.000)               |
-| L (12) | sisa_bayar          | Sisa yang harus dibayar                      |
-| M (13) | file_tugas_url      | URL file tugas dari customer (tidak dipakai) |
+| Jenis                 | Rumus                                   |
+| --------------------- | --------------------------------------- |
+| `Makalah` / `Artikel` | `30000 + ceil((halaman - 10)/5) * 5000` |
+| `PPT`                 | `20000 + max(0, halaman - 5) * 3000`    |
+| `Tugas Harian`        | `20000 + max(0, halaman - 2) * 4000`    |
+| `Test`                | `5000`                                  |
+
+#### `biayaTambahan(tipe_order)`
+
+| tipe_order      | Tambahan |
+| --------------- | -------: |
+| `standar`       |        0 |
+| `ekspres`       |     7000 |
+| `super ekspres` |    15000 |
+
+### 5.2 Rumus DP dan sisa bayar
+
+DP:
+
+- **DP = 33% dari total harga (Math.ceil(harga \* 0.33))**
+
+Sisa bayar:
+
+- `sisa_bayar = harga - dp`
+
+### 5.3 Rumus estimasi selesai
+
+Ketika `tipe === 'dp'` dan status awal valid `menunggu pembayaran dp`, dihitung berdasarkan `jenis` dan `halaman`, lalu dikoreksi berdasarkan `tipe_order`.
 
 ---
 
-## Menjalankan Proyek
+## 6) API & Hooks
 
-### Development (Replit)
+### 6.1 GAS actions (doGet & doPost)
 
-Workflow sudah terkonfigurasi. Klik tombol Run atau jalankan:
+Sumber: `google-apps-script/Code.gs`.
 
-```
-PORT=24771 BASE_PATH=/ pnpm --filter @workspace/jasa-tugas run dev
-```
+---
 
-### Build untuk Production
+## API Endpoints (Vercel)
 
-```
-pnpm --filter @workspace/jasa-tugas run build
-```
+> Bagian ini khusus endpoint Vercel.
 
-### Environment Variables yang Dibutuhkan
+Base: `POST /api/payment/*`
 
-| Nama           | Keterangan                            |
-| -------------- | ------------------------------------- |
-| `VITE_GAS_URL` | URL deployment Google Apps Script     |
-| `PORT`         | Port server (default 24771 di Replit) |
-| `BASE_PATH`    | Base path URL (default `/`)           |
+### POST /api/payment/create
+
+- Membuat payment link Mayar.
+- Input: `order_id, nama, wa, harga, jenis, tipe`.
+- Output: `payment_link, transaction_id`.
+
+### POST /api/payment/qris
+
+- Mengambil QR string dari Mayar via GraphQL.
+- Input: `transaction_id`.
+- Output: `qr_string, expires_at`.
+
+### Environment variable
+
+- `MAYAR_API_KEY`
+
+---
+
+## 7) Fitur per Halaman
+
+### 7.1 order.tsx (customer)
+
+Customer:
+
+- Buat order via `useCreateOrder()`
+- (opsional) upload file pendukung via `useUploadBukti()` dengan `tipe='file_tugas'`
+- Menampilkan ringkasan harga dan DP (33%)
+
+### 7.2 track.tsx (customer)
+
+- `menunggu pembayaran dp` → tombol **Bayar DP** (QRIS otomatis via Mayar)
+- `menunggu pelunasan` → tombol **Bayar Pelunasan** (QRIS otomatis via Mayar)
+- `cek file` → unduh `hasil_url`, selesai atau ajukan revisi
+
+### 7.3 admin.tsx (admin)
+
+- Verifikasi order
+- Upload hasil pertama untuk memicu pelunasan
+- Upload hasil revisi
+
+---
+
+## 8) Catatan Teknis
+
+- Status order adalah sumber kebenaran: kolom `status` di Sheets.
+
+---
+
+## Lampiran: Lokasi kode terkait
+
+| Konsep                        | Lokasi                                                                                   |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| Validasi status & handler GAS | `google-apps-script/Code.gs`                                                             |
+| Type `Order` dan hook API     | `artifacts/jasa-tugas/src/hooks/use-orders.ts`                                           |
+| UI order form                 | `artifacts/jasa-tugas/src/pages/order.tsx`                                               |
+| UI tracking & revisi          | `artifacts/jasa-tugas/src/pages/track.tsx`                                               |
+| UI admin & aksi per status    | `artifacts/jasa-tugas/src/pages/admin.tsx`                                               |
+| Proxy publik/admin            | `artifacts/jasa-tugas/api/proxy.ts`, `artifacts/jasa-tugas/api/admin/proxy.ts`           |
+| Payment link & QRIS           | `artifacts/jasa-tugas/api/payment/create.ts`, `artifacts/jasa-tugas/api/payment/qris.ts` |
+| Webhook payment               | `artifacts/jasa-tugas/api/webhook.ts`                                                    |
+| Auth admin                    | `artifacts/jasa-tugas/api/auth/login.ts`                                                 |
