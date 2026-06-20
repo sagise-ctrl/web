@@ -233,7 +233,7 @@ function handleCreateOrder(data) {
   sheet.appendRow([
     order_id,
     data.nama,
-    data.wa,
+    String(data.wa),
     data.jenis,
     Number(data.halaman),
     data.deadline || "",
