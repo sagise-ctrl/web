@@ -5,107 +5,127 @@ async function getFCMAccessToken(): Promise<string> {
   const serviceAccount = JSON.parse(
     process.env.FIREBASE_SERVICE_ACCOUNT || "{}",
   );
-
   const auth = new GoogleAuth({
     credentials: serviceAccount,
     scopes: ["https://www.googleapis.com/auth/firebase.messaging"],
   });
-
   const client = await auth.getClient();
   const token = await client.getAccessToken();
-
   return token.token || "";
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  const { title, body, data } = req.body;
-
-  if (!title || !body) {
-    return res.status(400).json({ error: "title dan body wajib diisi" });
-  }
-
-  const DEVICE_TOKEN = process.env.FCM_DEVICE_TOKEN;
-
-  if (!DEVICE_TOKEN) {
-    return res
-      .status(500)
-      .json({ error: "FCM_DEVICE_TOKEN belum dikonfigurasi" });
-  }
-
+async function getAllTokens(gasUrl: string): Promise<string[]> {
   try {
-    const accessToken = await getFCMAccessToken();
+    const res = await fetch(`${gasUrl}?action=getAllTokens`);
+    const data = await res.json();
+    return data?.tokens || [];
+  } catch {
+    return [];
+  }
+}
 
-    const serviceAccount = JSON.parse(
-      process.env.FIREBASE_SERVICE_ACCOUNT || "{}",
-    );
+async function deleteToken(gasUrl: string, token: string): Promise<void> {
+  try {
+    await fetch(gasUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      redirect: "follow",
+      body: JSON.stringify({ action: "deleteToken", token }),
+    });
+  } catch {}
+}
 
-    const projectId = serviceAccount.project_id;
-
-    const fcmUrl = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
-
-    // ===== DEBUG LOG =====
-    console.log("========== FCM DEBUG ==========");
-    console.log("PROJECT_ID:", projectId);
-    console.log("DEVICE_TOKEN_LENGTH:", DEVICE_TOKEN.length);
-    console.log("DEVICE_TOKEN_START:", DEVICE_TOKEN.substring(0, 30));
-    console.log(
-      "DEVICE_TOKEN_END:",
-      DEVICE_TOKEN.substring(DEVICE_TOKEN.length - 30),
-    );
-    console.log("FCM_URL:", fcmUrl);
-    console.log("===============================");
-    // =======================
-
-    const payload = {
+async function sendToToken(
+  accessToken: string,
+  projectId: string,
+  deviceToken: string,
+  title: string,
+  body: string,
+  data: Record<string, string>,
+): Promise<{ success: boolean; expired: boolean }> {
+  const fcmUrl = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+  const res = await fetch(fcmUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
       message: {
-        token: DEVICE_TOKEN,
-        notification: {
-          title,
-          body,
-        },
+        token: deviceToken,
+        notification: { title, body },
         data: data || {},
       },
-    };
+    }),
+  });
 
-    console.log("FCM_PAYLOAD:", JSON.stringify(payload, null, 2));
+  const result = await res.json();
 
-    const fcmRes = await fetch(fcmUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
+  if (!res.ok) {
+    const errorCode = result?.error?.details?.[0]?.errorCode || "";
+    const expired =
+      errorCode === "UNREGISTERED" || errorCode === "INVALID_ARGUMENT";
+    return { success: false, expired };
+  }
 
-    const fcmData = await fcmRes.json();
+  return { success: true, expired: false };
+}
 
-    console.log("FCM_STATUS:", fcmRes.status);
-    console.log("FCM_RESPONSE:", JSON.stringify(fcmData, null, 2));
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST")
+    return res.status(405).json({ error: "Method not allowed" });
 
-    if (!fcmRes.ok) {
-      console.error("FCM_ERROR:", fcmData);
+  const { title, body, data } = req.body;
+  if (!title || !body)
+    return res.status(400).json({ error: "title dan body wajib diisi" });
 
-      return res.status(500).json({
-        success: false,
-        error: fcmData,
-      });
+  const GAS_URL = process.env.GAS_URL;
+  if (!GAS_URL)
+    return res.status(500).json({ error: "GAS_URL tidak dikonfigurasi" });
+
+  const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!FIREBASE_SERVICE_ACCOUNT)
+    return res
+      .status(500)
+      .json({ error: "FIREBASE_SERVICE_ACCOUNT tidak dikonfigurasi" });
+
+  try {
+    const serviceAccount = JSON.parse(FIREBASE_SERVICE_ACCOUNT);
+    const projectId = serviceAccount.project_id;
+
+    const [accessToken, tokens] = await Promise.all([
+      getFCMAccessToken(),
+      getAllTokens(GAS_URL),
+    ]);
+
+    if (tokens.length === 0) {
+      console.warn("NOTIFY: tidak ada token terdaftar");
+      return res
+        .status(200)
+        .json({ success: true, message: "tidak ada token" });
     }
 
-    return res.status(200).json({
-      success: true,
-      response: fcmData,
-    });
-  } catch (err: any) {
-    console.error("SERVER_ERROR:", err);
+    const results = await Promise.all(
+      tokens.map((token) =>
+        sendToToken(accessToken, projectId, token, title, body, data || {}),
+      ),
+    );
 
-    return res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    // Auto-cleanup token expired
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].expired) {
+        console.log("NOTIFY: hapus token expired", tokens[i].slice(0, 20));
+        await deleteToken(GAS_URL, tokens[i]);
+      }
+    }
+
+    const successCount = results.filter((r) => r.success).length;
+    console.log(`NOTIFY: ${successCount}/${tokens.length} terkirim`);
+
+    return res
+      .status(200)
+      .json({ success: true, sent: successCount, total: tokens.length });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 }

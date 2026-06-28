@@ -13,6 +13,7 @@
 
 const SPREADSHEET_ID = "1M46VQj9eGn4_Pn_bg0u4IAcuqnaAekEAHo-yeVXV9Eo";
 const SHEET_NAME = "Orders";
+const ADMIN_TOKENS_SHEET = "admin_tokens";
 
 const COLUMNS = {
   ORDER_ID: 1,
@@ -150,6 +151,7 @@ function doGet(e) {
   try {
     if (action === "getOrder") return handleGetOrder(e.parameter.order_id);
     if (action === "getAllOrders") return handleGetAllOrders();
+    if (action === "getAllTokens") return handleGetAllTokens();
     if (action === "checkWa") return handleCheckWa(e.parameter.wa);
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
@@ -194,6 +196,8 @@ function doPost(e) {
       return handleSaveSnapToken(body.order_id, body.snap_token);
     if (body.action === "updatePaymentStatus")
       return handleUpdatePaymentStatus(body.data);
+    if (body.action === "registerToken") return handleRegisterToken(body.token);
+    if (body.action === "deleteToken") return handleDeleteToken(body.token);
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
     return jsonResponse({ success: false, message: err.message });
@@ -233,7 +237,7 @@ function handleCreateOrder(data) {
   sheet.appendRow([
     order_id,
     data.nama,
-    String(data.wa),
+    "'" + String(data.wa),
     data.jenis,
     Number(data.halaman),
     data.deadline || "",
@@ -255,6 +259,16 @@ function handleCreateOrder(data) {
     "",
     "belum_bayar",
   ]);
+
+  sendAdminNotification(
+    "🆕 Order Baru",
+    `${data.nama} membuat order ${order_id}`,
+    {
+      type: "order",
+      order_id: String(order_id),
+    },
+  );
+
   return jsonResponse({ success: true, order_id });
 }
 
@@ -531,6 +545,11 @@ function handleSubmitRevisi(order_id, catatan, files, estimasi_revisi) {
       sheet
         .getRange(i + 1, COLUMNS.ESTIMASI_REVISI)
         .setValue(estimasiRevisi.toISOString());
+
+      sendAdminNotification("🔄 Revisi Baru", `${order_id} mengirim revisi`, {
+        type: "revision",
+        order_id: String(order_id),
+      });
       return jsonResponse({ success: true });
     }
   }
@@ -589,12 +608,34 @@ function handleUpdatePaymentStatus(data) {
         sheet
           .getRange(i + 1, COLUMNS.ESTIMASI_SELESAI)
           .setValue(estimasiSelesai.toISOString());
+
+        var namaCustomer = rows[i][COLUMNS.NAMA - 1] || data.order_id;
+        sendAdminNotification(
+          "DP Masuk",
+          `${namaCustomer} (${data.order_id}) telah membayar DP`,
+          {
+            type: "payment",
+            payment: "dp",
+            order_id: String(data.order_id),
+          },
+        );
       } else if (data.tipe === "final") {
         sheet.getRange(i + 1, 23).setValue(data.mayar_transaction_id || "");
         sheet.getRange(i + 1, 8).setValue("cek file");
         sheet
           .getRange(i + 1, COLUMNS.CEK_FILE_AT)
           .setValue(new Date().toISOString());
+
+        var namaCustomerFinal = rows[i][COLUMNS.NAMA - 1] || data.order_id;
+        sendAdminNotification(
+          "Pelunasan Masuk",
+          `${namaCustomerFinal} (${data.order_id}) telah melakukan pelunasan`,
+          {
+            type: "payment",
+            payment: "lunas",
+            order_id: String(data.order_id),
+          },
+        );
       }
       return jsonResponse({ success: true });
     }
@@ -624,15 +665,96 @@ function getMimeType(fileName) {
   return types[ext] || "application/octet-stream";
 }
 
+function sendAdminNotification(title, body, data) {
+  try {
+    const url = "https://tugasly.my.id/api/notify";
+    const payload = {
+      title: title,
+      body: body,
+      data: data || {},
+    };
+
+    const options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    };
+
+    const res = UrlFetchApp.fetch(url, options);
+    Logger.log(res.getContentText());
+    return res;
+  } catch (err) {
+    Logger.log(err);
+    return null;
+  }
+}
+
 function jsonResponse(data) {
   const out = ContentService.createTextOutput(JSON.stringify(data));
   out.setMimeType(ContentService.MimeType.JSON);
   return out;
 }
 
+// ─── Get or Create Admin Tokens Sheet ────────────────────────
+function getTokenSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(ADMIN_TOKENS_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(ADMIN_TOKENS_SHEET);
+    sheet.getRange(1, 1).setValue("token");
+    sheet.getRange(1, 2).setValue("created_at");
+  }
+  return sheet;
+}
+
+// ─── Register Admin Token ─────────────────────────────────────
+function handleRegisterToken(token) {
+  if (!token)
+    return jsonResponse({ success: false, message: "token diperlukan" });
+  const sheet = getTokenSheet();
+  const data = sheet.getDataRange().getValues();
+  // Cek apakah token sudah ada
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === token) {
+      return jsonResponse({ success: true, message: "token sudah terdaftar" });
+    }
+  }
+  // Tambah token baru
+  sheet.appendRow([token, new Date().toISOString()]);
+  return jsonResponse({ success: true, message: "token berhasil didaftarkan" });
+}
+
+// ─── Get All Admin Tokens ─────────────────────────────────────
+function handleGetAllTokens() {
+  const sheet = getTokenSheet();
+  const data = sheet.getDataRange().getValues();
+  const tokens = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) tokens.push(data[i][0]);
+  }
+  return jsonResponse({ success: true, tokens });
+}
+
+// ─── Delete Admin Token ───────────────────────────────────────
+function handleDeleteToken(token) {
+  if (!token)
+    return jsonResponse({ success: false, message: "token diperlukan" });
+  const sheet = getTokenSheet();
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === token) {
+      sheet.deleteRow(i + 1);
+      return jsonResponse({ success: true, message: "token dihapus" });
+    }
+  }
+  return jsonResponse({ success: false, message: "token tidak ditemukan" });
+}
+
 // ─── Auto Close Orders ────────────────────────────────────────
 function autoCloseOrders() {
   const sheet = getSheet();
+
   const data = sheet.getDataRange().getValues();
   const now = new Date();
   const BATAS_HARI = 3;
