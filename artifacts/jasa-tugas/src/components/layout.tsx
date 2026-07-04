@@ -21,12 +21,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               Beranda
             </Link>
             <Link
-              href="/order"
-              className="text-sm font-medium text-slate-600 hover:text-primary transition-colors"
-            >
-              Order Baru
-            </Link>
-            <Link
               href="/track"
               className="text-sm font-medium text-slate-600 hover:text-primary transition-colors"
             >
@@ -36,7 +30,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
               href="/akun"
               className="text-sm font-medium text-slate-600 hover:text-primary transition-colors"
             >
-              Akun
+              Login
+            </Link>
+            <Link
+              href="/affiliate"
+              className="text-sm font-medium text-slate-600 hover:text-primary transition-colors"
+            >
+              Affiliate
             </Link>
           </nav>
         </div>
