@@ -334,6 +334,11 @@ export interface AffiliateAccount {
   nama: string;
   wa: string;
   saldo_komisi: number;
+  rekening_bank?: string;
+  nomor_rekening?: string;
+  atas_nama?: string;
+  rekening_status?: string;
+  rekening_updated_at?: string;
   commissions: AffiliateCommission[];
 }
 
@@ -460,6 +465,11 @@ export interface AffiliateData {
   created_at: string;
   approved_at: string;
   wa_sent: boolean;
+  rekening_bank?: string;
+  nomor_rekening?: string;
+  atas_nama?: string;
+  rekening_status?: string;
+  rekening_updated_at?: string;
 }
 
 export function useGetAllUsers() {
@@ -543,5 +553,66 @@ export function useApproveAffiliate() {
         throw new Error(json.message || "Gagal approve affiliate");
       return json;
     },
+  });
+}
+
+// ─── Rekening & Withdrawal Hooks ──────────────────────────────
+export interface WithdrawalHistory {
+  withdrawal_id: string;
+  nominal: number;
+  rekening_bank: string;
+  nomor_rekening: string;
+  atas_nama: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  approved_at: string;
+}
+
+export function useSaveRekening() {
+  return useMutation({
+    mutationFn: async (data: {
+      affiliate_id: string;
+      rekening_bank: string;
+      nomor_rekening: string;
+      atas_nama: string;
+    }) => {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: "saveRekening", data }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal simpan rekening");
+      return json;
+    },
+  });
+}
+
+export function useApproveRekening() {
+  return useMutation({
+    mutationFn: async (affiliate_id: string) => {
+      const res = await fetch(ADMIN_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        credentials: "include",
+        body: JSON.stringify({ action: "approveRekening", affiliate_id }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal approve rekening");
+      return json;
+    },
+  });
+}
+
+export function useGetWithdrawalHistory(affiliate_id: string) {
+  return useQuery({
+    queryKey: ["withdrawalHistory", affiliate_id],
+    queryFn: async () => {
+      const res = await fetch(`${API_URL}?action=getWithdrawalHistory&affiliate_id=${affiliate_id}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal ambil riwayat pencairan");
+      return json.data as WithdrawalHistory[];
+    },
+    enabled: !!affiliate_id,
   });
 }

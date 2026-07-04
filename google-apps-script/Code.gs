@@ -72,6 +72,11 @@ const AFFILIATE_COLUMNS = {
   CREATED_AT: 7,
   APPROVED_AT: 8,
   WA_SENT: 9,
+  REKENING_BANK: 10,
+  NOMOR_REKENING: 11,
+  ATAS_NAMA: 12,
+  REKENING_STATUS: 13,
+  REKENING_UPDATED_AT: 14,
 };
 
 const VALID_STATUSES = [
@@ -188,6 +193,8 @@ function doGet(e) {
       return handleGetAffiliateAccount(e.parameter.affiliate_id);
     if (action === "getAllUsers") return handleGetAllUsers();
     if (action === "getAllAffiliates") return handleGetAllAffiliates();
+    if (action === "getWithdrawalHistory")
+      return handleGetWithdrawalHistory(e.parameter.affiliate_id);
     if (action === "checkWa") return handleCheckWa(e.parameter.wa);
 
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
@@ -243,6 +250,9 @@ function doPost(e) {
       return handleRequestWithdrawal(body.data);
     if (body.action === "approveWithdrawal")
       return handleApproveWithdrawal(body.withdrawal_id, body.action_type);
+    if (body.action === "saveRekening") return handleSaveRekening(body.data);
+    if (body.action === "approveRekening")
+      return handleApproveRekening(body.affiliate_id);
     if (body.action === "registerToken") return handleRegisterToken(body.token);
     if (body.action === "deleteToken") return handleDeleteToken(body.token);
     if (body.action === "markWaSent")
@@ -1141,6 +1151,14 @@ function handleGetAffiliateAccount(affiliate_id) {
           nama: rows[i][2],
           wa: rows[i][3],
           saldo_komisi: rows[i][5],
+          rekening_bank: rows[i][AFFILIATE_COLUMNS.REKENING_BANK - 1] || "",
+          nomor_rekening:
+            rows[i][AFFILIATE_COLUMNS.NOMOR_REKENING - 1] || "",
+          atas_nama: rows[i][AFFILIATE_COLUMNS.ATAS_NAMA - 1] || "",
+          rekening_status:
+            rows[i][AFFILIATE_COLUMNS.REKENING_STATUS - 1] || "",
+          rekening_updated_at:
+            rows[i][AFFILIATE_COLUMNS.REKENING_UPDATED_AT - 1] || "",
           commissions,
         },
       });
@@ -1387,6 +1405,12 @@ function handleGetAllAffiliates() {
       created_at: rows[i][AFFILIATE_COLUMNS.CREATED_AT - 1],
       approved_at: rows[i][AFFILIATE_COLUMNS.APPROVED_AT - 1] || "",
       wa_sent: rows[i][AFFILIATE_COLUMNS.WA_SENT - 1] || false,
+      rekening_bank: rows[i][AFFILIATE_COLUMNS.REKENING_BANK - 1] || "",
+      nomor_rekening: rows[i][AFFILIATE_COLUMNS.NOMOR_REKENING - 1] || "",
+      atas_nama: rows[i][AFFILIATE_COLUMNS.ATAS_NAMA - 1] || "",
+      rekening_status: rows[i][AFFILIATE_COLUMNS.REKENING_STATUS - 1] || "",
+      rekening_updated_at:
+        rows[i][AFFILIATE_COLUMNS.REKENING_UPDATED_AT - 1] || "",
     });
   }
   return jsonResponse({ success: true, data: affiliates });
@@ -1418,4 +1442,141 @@ function handleMarkWaSent(type, id) {
   }
 
   return jsonResponse({ success: false, message: "Data tidak ditemukan" });
+}
+
+// Save/Edit Rekening Affiliate
+function handleSaveRekening(data) {
+  if (
+    !data.affiliate_id ||
+    !data.rekening_bank ||
+    !data.nomor_rekening ||
+    !data.atas_nama
+  )
+    return jsonResponse({
+      success: false,
+      message: "Data rekening tidak lengkap",
+    });
+
+  const sheet = getAffiliateSheet();
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === data.affiliate_id) {
+      const wdSheet = getWithdrawalSheet();
+      const wdRows = wdSheet.getDataRange().getValues();
+      for (let j = 1; j < wdRows.length; j++) {
+        if (wdRows[j][1] === data.affiliate_id && wdRows[j][6] === "pending") {
+          return jsonResponse({
+            success: false,
+            message: "Tidak bisa edit rekening saat ada pencairan pending",
+          });
+        }
+      }
+
+      const lastUpdated = rows[i][AFFILIATE_COLUMNS.REKENING_UPDATED_AT - 1];
+      if (lastUpdated) {
+        const lastDate = new Date(lastUpdated);
+        const now = new Date();
+        const diffDays = (now - lastDate) / (1000 * 60 * 60 * 24);
+        if (diffDays < 7) {
+          const nextEdit = new Date(
+            lastDate.getTime() + 7 * 24 * 60 * 60 * 1000,
+          );
+          return jsonResponse({
+            success: false,
+            message:
+              "Rekening bisa diedit lagi pada " +
+              nextEdit.toLocaleDateString("id-ID", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+              }),
+          });
+        }
+      }
+
+      sheet
+        .getRange(i + 1, AFFILIATE_COLUMNS.REKENING_BANK)
+        .setValue(data.rekening_bank);
+      sheet
+        .getRange(i + 1, AFFILIATE_COLUMNS.NOMOR_REKENING)
+        .setValue(data.nomor_rekening);
+      sheet
+        .getRange(i + 1, AFFILIATE_COLUMNS.ATAS_NAMA)
+        .setValue(data.atas_nama);
+      sheet
+        .getRange(i + 1, AFFILIATE_COLUMNS.REKENING_STATUS)
+        .setValue("pending");
+      sheet
+        .getRange(i + 1, AFFILIATE_COLUMNS.REKENING_UPDATED_AT)
+        .setValue(new Date().toISOString());
+
+      return jsonResponse({
+        success: true,
+        message: "Rekening berhasil diajukan, menunggu verifikasi admin",
+      });
+    }
+  }
+
+  return jsonResponse({ success: false, message: "Affiliate tidak ditemukan" });
+}
+
+// Approve Rekening (Admin)
+function handleApproveRekening(affiliate_id) {
+  if (!affiliate_id)
+    return jsonResponse({
+      success: false,
+      message: "affiliate_id diperlukan",
+    });
+
+  const sheet = getAffiliateSheet();
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === affiliate_id) {
+      if (rows[i][AFFILIATE_COLUMNS.REKENING_STATUS - 1] !== "pending") {
+        return jsonResponse({
+          success: false,
+          message: "Tidak ada rekening pending untuk diapprove",
+        });
+      }
+      sheet.getRange(i + 1, AFFILIATE_COLUMNS.REKENING_STATUS).setValue("active");
+      return jsonResponse({
+        success: true,
+        message: "Rekening berhasil diverifikasi",
+      });
+    }
+  }
+
+  return jsonResponse({ success: false, message: "Affiliate tidak ditemukan" });
+}
+
+// Get Withdrawal History (Affiliate)
+function handleGetWithdrawalHistory(affiliate_id) {
+  if (!affiliate_id)
+    return jsonResponse({
+      success: false,
+      message: "affiliate_id diperlukan",
+    });
+
+  const wdSheet = getWithdrawalSheet();
+  const wdRows = wdSheet.getDataRange().getValues();
+  const history = [];
+
+  for (let i = 1; i < wdRows.length; i++) {
+    if (wdRows[i][1] === affiliate_id) {
+      history.push({
+        withdrawal_id: wdRows[i][0],
+        nominal: wdRows[i][2],
+        rekening_bank: wdRows[i][3],
+        nomor_rekening: wdRows[i][4],
+        atas_nama: wdRows[i][5],
+        status: wdRows[i][6],
+        created_at: wdRows[i][7],
+        approved_at: wdRows[i][8] || "",
+      });
+    }
+  }
+
+  return jsonResponse({ success: true, data: history });
 }

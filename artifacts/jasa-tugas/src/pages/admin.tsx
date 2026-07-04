@@ -25,6 +25,7 @@ import {
   useGetAllAffiliates,
   useApproveUser,
   useApproveAffiliate,
+  useApproveRekening,
   useMarkWaSent,
   type Order,
   type OrderStatus,
@@ -483,6 +484,7 @@ function AdminDashboard() {
     useGetAllAffiliates();
   const approveUser = useApproveUser();
   const approveAffiliate = useApproveAffiliate();
+  const approveRekening = useApproveRekening();
   const markWaSent = useMarkWaSent();
 
   const pendingUsersCount = allUsers.filter(
@@ -1381,6 +1383,12 @@ function AdminDashboard() {
                     WA Sent
                   </th>
                   <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Rekening
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Status Rekening
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
                     Tanggal
                   </th>
                   <th className="text-left px-4 py-3 text-slate-600 font-medium">
@@ -1392,7 +1400,7 @@ function AdminDashboard() {
                 {allAffiliates.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={11}
                       className="text-center py-8 text-slate-400"
                     >
                       Belum ada affiliate terdaftar
@@ -1437,6 +1445,51 @@ function AdminDashboard() {
                         >
                           {aff.wa_sent ? "Terkirim" : "Belum"}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600">
+                        {aff.rekening_bank
+                          ? `${aff.rekening_bank} - ${aff.nomor_rekening}`
+                          : "-"}
+                        {aff.atas_nama && (
+                          <p className="text-slate-400">{aff.atas_nama}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {aff.rekening_status === "pending" && (
+                          <div className="flex flex-col gap-1">
+                            <Badge
+                              variant="outline"
+                              className="bg-amber-50 text-amber-700 border-amber-200 text-xs"
+                            >
+                              Pending
+                            </Badge>
+                            <Button
+                              size="sm"
+                              className="text-xs h-7"
+                              disabled={approveRekening.isPending}
+                              onClick={async () => {
+                                await approveRekening.mutateAsync(
+                                  aff.affiliate_id,
+                                );
+                                refetchAffiliates();
+                                toast({ title: "Rekening diverifikasi" });
+                              }}
+                            >
+                              Approve
+                            </Button>
+                          </div>
+                        )}
+                        {aff.rekening_status === "active" && (
+                          <Badge
+                            variant="outline"
+                            className="bg-green-50 text-green-700 border-green-200 text-xs"
+                          >
+                            Terverifikasi
+                          </Badge>
+                        )}
+                        {!aff.rekening_status && (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">
                         {new Date(aff.created_at).toLocaleDateString("id-ID")}
