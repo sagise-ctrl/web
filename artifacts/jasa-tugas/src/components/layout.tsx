@@ -32,6 +32,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
             >
               Cek Status
             </Link>
+            <Link
+              href="/akun"
+              className="text-sm font-medium text-slate-600 hover:text-primary transition-colors"
+            >
+              Akun
+            </Link>
           </nav>
         </div>
       </header>

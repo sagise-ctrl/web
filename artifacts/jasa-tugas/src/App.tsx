@@ -9,6 +9,12 @@ import TrackPage from "@/pages/track";
 import AdminPage from "@/pages/admin";
 import TermsPage from "@/pages/terms";
 import PaymentFinishPage from "@/pages/payment-finish";
+import RegisterUserPage from "@/pages/register-user";
+import LoginUserPage from "@/pages/login-user";
+import AkunPage from "@/pages/akun";
+import RegisterAffiliatePage from "@/pages/register-affiliate";
+import LoginAffiliatePage from "@/pages/login-affiliate";
+import AffiliatePage from "@/pages/affiliate";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +34,12 @@ function Router() {
       <Route path="/admin" component={AdminPage} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/payment-finish" component={PaymentFinishPage} />
+      <Route path="/register-user" component={RegisterUserPage} />
+      <Route path="/login-user" component={LoginUserPage} />
+      <Route path="/akun" component={AkunPage} />
+      <Route path="/register-affiliate" component={RegisterAffiliatePage} />
+      <Route path="/login-affiliate" component={LoginAffiliatePage} />
+      <Route path="/affiliate" component={AffiliatePage} />
       <Route component={NotFound} />
     </Switch>
   );

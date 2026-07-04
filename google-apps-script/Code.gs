@@ -14,6 +14,12 @@
 const SPREADSHEET_ID = "1M46VQj9eGn4_Pn_bg0u4IAcuqnaAekEAHo-yeVXV9Eo";
 const SHEET_NAME = "Orders";
 const ADMIN_TOKENS_SHEET = "admin_tokens";
+const USERS_SHEET = "users";
+const USER_ORDERS_SHEET = "user_orders";
+const AFFILIATES_SHEET = "affiliates";
+const AFFILIATE_COMMISSIONS_SHEET = "affiliate_commissions";
+const WITHDRAWAL_REQUESTS_SHEET = "withdrawal_requests";
+const REFERRAL_USAGE_SHEET = "referral_usage";
 
 const COLUMNS = {
   ORDER_ID: 1,
@@ -152,7 +158,12 @@ function doGet(e) {
     if (action === "getOrder") return handleGetOrder(e.parameter.order_id);
     if (action === "getAllOrders") return handleGetAllOrders();
     if (action === "getAllTokens") return handleGetAllTokens();
+    if (action === "getUserAccount")
+      return handleGetUserAccount(e.parameter.user_id);
+    if (action === "getAffiliateAccount")
+      return handleGetAffiliateAccount(e.parameter.affiliate_id);
     if (action === "checkWa") return handleCheckWa(e.parameter.wa);
+
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
     return jsonResponse({ success: false, message: err.message });
@@ -196,8 +207,19 @@ function doPost(e) {
       return handleSaveSnapToken(body.order_id, body.snap_token);
     if (body.action === "updatePaymentStatus")
       return handleUpdatePaymentStatus(body.data);
+    if (body.action === "registerUser") return handleRegisterUser(body.data);
+    if (body.action === "approveUser") return handleApproveUser(body.user_id);
+    if (body.action === "registerAffiliate")
+      return handleRegisterAffiliate(body.data);
+    if (body.action === "approveAffiliate")
+      return handleApproveAffiliate(body.affiliate_id);
+    if (body.action === "requestWithdrawal")
+      return handleRequestWithdrawal(body.data);
+    if (body.action === "approveWithdrawal")
+      return handleApproveWithdrawal(body.withdrawal_id, body.action_type);
     if (body.action === "registerToken") return handleRegisterToken(body.token);
     if (body.action === "deleteToken") return handleDeleteToken(body.token);
+
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
     return jsonResponse({ success: false, message: err.message });
@@ -365,7 +387,6 @@ function handleUpdatePayment(order_id, tipe, transaction_id) {
       const currentStatus = data[i][7];
 
       if (tipe === "dp") {
-        // Pastikan status saat ini memang menunggu DP
         if (currentStatus !== "menunggu pembayaran dp") {
           return jsonResponse({
             success: false,
@@ -373,7 +394,7 @@ function handleUpdatePayment(order_id, tipe, transaction_id) {
           });
         }
         sheet.getRange(i + 1, COLUMNS.STATUS).setValue("proses pengerjaan");
-        // Kalkulasi estimasi selesai otomatis
+
         var jenis = data[i][COLUMNS.JENIS - 1];
         var halaman = Number(data[i][COLUMNS.HALAMAN - 1]) || 1;
         var tipeOrder = data[i][COLUMNS.TIPE_ORDER - 1] || "standar";
@@ -398,9 +419,8 @@ function handleUpdatePayment(order_id, tipe, transaction_id) {
         sheet
           .getRange(i + 1, COLUMNS.PAYMENT_DP_ID)
           .setValue(transaction_id || "");
-        sheet.getRange(i + 1, COLUMNS.SNAP_TOKEN).setValue(""); // clear token
+        sheet.getRange(i + 1, COLUMNS.SNAP_TOKEN).setValue("");
       } else if (tipe === "final") {
-        // Pastikan status saat ini memang menunggu pelunasan
         if (currentStatus !== "menunggu pelunasan") {
           return jsonResponse({
             success: false,
@@ -411,7 +431,7 @@ function handleUpdatePayment(order_id, tipe, transaction_id) {
         sheet
           .getRange(i + 1, COLUMNS.PAYMENT_FINAL_ID)
           .setValue(transaction_id || "");
-        sheet.getRange(i + 1, COLUMNS.SNAP_TOKEN).setValue(""); // clear token
+        sheet.getRange(i + 1, COLUMNS.SNAP_TOKEN).setValue("");
       }
 
       return jsonResponse({ success: true });
@@ -467,17 +487,14 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
       if (data[i][0] === order_id) {
         if (tipe === "file_tugas") {
           sheet.getRange(i + 1, COLUMNS.FILE_TUGAS_URL).setValue(fileUrl);
-          // tidak ubah status
         } else if (tipe === "hasil") {
           sheet.getRange(i + 1, COLUMNS.HASIL_URL).setValue(fileUrl);
           const currentStatus = data[i][7];
           if (currentStatus === "proses pengerjaan") {
-            // Hasil pertama → minta pelunasan
             sheet
               .getRange(i + 1, COLUMNS.STATUS)
               .setValue("menunggu pelunasan");
           } else if (currentStatus === "revisi") {
-            // Hasil revisi → langsung cek file
             sheet.getRange(i + 1, COLUMNS.STATUS).setValue("cek file");
           }
         }
@@ -714,13 +731,11 @@ function handleRegisterToken(token) {
     return jsonResponse({ success: false, message: "token diperlukan" });
   const sheet = getTokenSheet();
   const data = sheet.getDataRange().getValues();
-  // Cek apakah token sudah ada
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === token) {
       return jsonResponse({ success: true, message: "token sudah terdaftar" });
     }
   }
-  // Tambah token baru
   sheet.appendRow([token, new Date().toISOString()]);
   return jsonResponse({ success: true, message: "token berhasil didaftarkan" });
 }
@@ -754,7 +769,6 @@ function handleDeleteToken(token) {
 // ─── Auto Close Orders ────────────────────────────────────────
 function autoCloseOrders() {
   const sheet = getSheet();
-
   const data = sheet.getDataRange().getValues();
   const now = new Date();
   const BATAS_HARI = 3;
@@ -773,4 +787,533 @@ function autoCloseOrders() {
       sheet.getRange(i + 1, COLUMNS.STATUS).setValue("selesai");
     }
   }
+}
+
+// ─── Sheet Helpers ────────────────────────────────────────────
+function getUserSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return ss.getSheetByName(USERS_SHEET);
+}
+
+function getUserOrdersSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return ss.getSheetByName(USER_ORDERS_SHEET);
+}
+
+function getAffiliateSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return ss.getSheetByName(AFFILIATES_SHEET);
+}
+
+function getAffiliateCommissionsSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return ss.getSheetByName(AFFILIATE_COMMISSIONS_SHEET);
+}
+
+function getWithdrawalSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return ss.getSheetByName(WITHDRAWAL_REQUESTS_SHEET);
+}
+
+function getReferralUsageSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return ss.getSheetByName(REFERRAL_USAGE_SHEET);
+}
+
+// ─── Generate ID ──────────────────────────────────────────────
+function generateUserId() {
+  return "USR-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+}
+
+function generateAffiliateId() {
+  return "AFF-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+}
+
+function generateReferralCode() {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "REF-";
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+function generateWithdrawalId() {
+  return "WD-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+}
+
+// ─── User Registration ────────────────────────────────────────
+function handleRegisterUser(data) {
+  if (!data.nama || !data.wa)
+    return jsonResponse({ success: false, message: "Nama dan WA wajib diisi" });
+
+  const sheet = getUserSheet();
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][2]) === String(data.wa)) {
+      return jsonResponse({
+        success: false,
+        message: "Nomor WA sudah terdaftar",
+      });
+    }
+  }
+
+  if (data.kode_referral) {
+    const affSheet = getAffiliateSheet();
+    const affRows = affSheet.getDataRange().getValues();
+    let validReferral = false;
+    for (let i = 1; i < affRows.length; i++) {
+      if (affRows[i][1] === data.kode_referral && affRows[i][4] === "active") {
+        if (String(affRows[i][3]) === String(data.wa)) {
+          return jsonResponse({
+            success: false,
+            message: "Tidak bisa pakai kode referral sendiri",
+          });
+        }
+        validReferral = true;
+        break;
+      }
+    }
+    if (!validReferral) {
+      return jsonResponse({
+        success: false,
+        message: "Kode referral tidak valid atau tidak aktif",
+      });
+    }
+
+    const refSheet = getReferralUsageSheet();
+    const refRows = refSheet.getDataRange().getValues();
+    for (let i = 1; i < refRows.length; i++) {
+      if (String(refRows[i][3]) === String(data.wa)) {
+        return jsonResponse({
+          success: false,
+          message: "WA ini sudah pernah pakai kode referral",
+        });
+      }
+    }
+  }
+
+  const userId = generateUserId();
+  sheet.appendRow([
+    userId,
+    data.nama,
+    String(data.wa),
+    data.kode_referral || "",
+    "pending",
+    0,
+    new Date().toISOString(),
+    "",
+  ]);
+
+  return jsonResponse({
+    success: true,
+    user_id: userId,
+    message: "Registrasi berhasil, tunggu konfirmasi admin via WA",
+  });
+}
+
+// ─── Approve User (Admin) ─────────────────────────────────────
+function handleApproveUser(user_id) {
+  if (!user_id)
+    return jsonResponse({ success: false, message: "user_id diperlukan" });
+
+  const sheet = getUserSheet();
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === user_id) {
+      if (rows[i][4] === "active") {
+        return jsonResponse({ success: false, message: "User sudah aktif" });
+      }
+
+      sheet.getRange(i + 1, 5).setValue("active");
+      sheet.getRange(i + 1, 8).setValue(new Date().toISOString());
+
+      const kodeReferral = rows[i][3];
+      if (kodeReferral) {
+        const affSheet = getAffiliateSheet();
+        const affRows = affSheet.getDataRange().getValues();
+        let affiliateId = "";
+        for (let j = 1; j < affRows.length; j++) {
+          if (affRows[j][1] === kodeReferral) {
+            affiliateId = affRows[j][0];
+            break;
+          }
+        }
+        const refSheet = getReferralUsageSheet();
+        refSheet.appendRow([
+          kodeReferral,
+          affiliateId,
+          user_id,
+          String(rows[i][2]),
+          new Date().toISOString(),
+        ]);
+      }
+
+      return jsonResponse({
+        success: true,
+        message: "User berhasil diaktifkan",
+      });
+    }
+  }
+
+  return jsonResponse({ success: false, message: "User tidak ditemukan" });
+}
+
+// ─── Get User Account ─────────────────────────────────────────
+function handleGetUserAccount(user_id) {
+  if (!user_id)
+    return jsonResponse({ success: false, message: "user_id diperlukan" });
+
+  const sheet = getUserSheet();
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === user_id && rows[i][4] === "active") {
+      const uoSheet = getUserOrdersSheet();
+      const uoRows = uoSheet.getDataRange().getValues();
+      const orders = [];
+      for (let j = 1; j < uoRows.length; j++) {
+        if (uoRows[j][0] === user_id) {
+          orders.push({
+            order_id: uoRows[j][1],
+            harga_order: uoRows[j][2],
+            poin_dipakai: uoRows[j][3],
+            diskon_poin: uoRows[j][4],
+            harga_dibayar: uoRows[j][5],
+            poin_didapat: uoRows[j][6],
+            created_at: uoRows[j][7],
+          });
+        }
+      }
+
+      return jsonResponse({
+        success: true,
+        data: {
+          user_id: rows[i][0],
+          nama: rows[i][1],
+          wa: rows[i][2],
+          kode_referral: rows[i][3],
+          saldo_poin: rows[i][5],
+          created_at: rows[i][6],
+          orders,
+        },
+      });
+    }
+  }
+
+  return jsonResponse({
+    success: false,
+    message: "User tidak ditemukan atau belum aktif",
+  });
+}
+
+// ─── Affiliate Registration ───────────────────────────────────
+function handleRegisterAffiliate(data) {
+  if (!data.nama || !data.wa)
+    return jsonResponse({ success: false, message: "Nama dan WA wajib diisi" });
+
+  const sheet = getAffiliateSheet();
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][3]) === String(data.wa)) {
+      return jsonResponse({
+        success: false,
+        message: "Nomor WA sudah terdaftar sebagai affiliate",
+      });
+    }
+  }
+
+  const affiliateId = generateAffiliateId();
+  const kodeReferral = generateReferralCode();
+
+  sheet.appendRow([
+    affiliateId,
+    kodeReferral,
+    data.nama,
+    String(data.wa),
+    "pending",
+    0,
+    new Date().toISOString(),
+    "",
+  ]);
+
+  return jsonResponse({
+    success: true,
+    message: "Registrasi affiliate berhasil, tunggu konfirmasi admin via WA",
+  });
+}
+
+// ─── Approve Affiliate (Admin) ───────────────────────────────
+function handleApproveAffiliate(affiliate_id) {
+  if (!affiliate_id)
+    return jsonResponse({ success: false, message: "affiliate_id diperlukan" });
+
+  const sheet = getAffiliateSheet();
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === affiliate_id) {
+      if (rows[i][4] === "active") {
+        return jsonResponse({
+          success: false,
+          message: "Affiliate sudah aktif",
+        });
+      }
+      sheet.getRange(i + 1, 5).setValue("active");
+      sheet.getRange(i + 1, 8).setValue(new Date().toISOString());
+      return jsonResponse({
+        success: true,
+        affiliate_id,
+        kode_referral: rows[i][1],
+        message: "Affiliate berhasil diaktifkan",
+      });
+    }
+  }
+
+  return jsonResponse({ success: false, message: "Affiliate tidak ditemukan" });
+}
+
+// ─── Get Affiliate Account ───────────────────────────────────
+function handleGetAffiliateAccount(affiliate_id) {
+  if (!affiliate_id)
+    return jsonResponse({ success: false, message: "affiliate_id diperlukan" });
+
+  const sheet = getAffiliateSheet();
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === affiliate_id && rows[i][4] === "active") {
+      const commSheet = getAffiliateCommissionsSheet();
+      const commRows = commSheet.getDataRange().getValues();
+      const commissions = [];
+      for (let j = 1; j < commRows.length; j++) {
+        if (commRows[j][0] === affiliate_id) {
+          commissions.push({
+            user_id: commRows[j][1],
+            order_id: commRows[j][2],
+            order_ke: commRows[j][3],
+            harga_order: commRows[j][4],
+            persen_komisi: commRows[j][5],
+            nominal_komisi: commRows[j][6],
+            created_at: commRows[j][7],
+          });
+        }
+      }
+
+      return jsonResponse({
+        success: true,
+        data: {
+          affiliate_id: rows[i][0],
+          kode_referral: rows[i][1],
+          nama: rows[i][2],
+          wa: rows[i][3],
+          saldo_komisi: rows[i][5],
+          commissions,
+        },
+      });
+    }
+  }
+
+  return jsonResponse({
+    success: false,
+    message: "Affiliate tidak ditemukan atau belum aktif",
+  });
+}
+
+// ─── Hitung Komisi ────────────────────────────────────────────
+function hitungKomisiAffiliate(orderKe) {
+  if (orderKe < 1 || orderKe > 10) return 0;
+  return (30 - (orderKe - 1) * 3) / 100;
+}
+
+// ─── Proses Poin & Komisi setelah Order Lunas ────────────────
+function handleOrderLunas(order_id, user_id, harga_order, poin_dipakai) {
+  if (!order_id || !user_id) return;
+
+  const diskon_poin = poin_dipakai * 1000;
+  const harga_dibayar = harga_order - diskon_poin;
+  const poin_didapat = Math.floor(harga_order / 15000);
+
+  const userSheet = getUserSheet();
+  const userRows = userSheet.getDataRange().getValues();
+  for (let i = 1; i < userRows.length; i++) {
+    if (userRows[i][0] === user_id) {
+      const saldoSekarang = Number(userRows[i][5]) || 0;
+      const saldoBaru = saldoSekarang - poin_dipakai + poin_didapat;
+      userSheet.getRange(i + 1, 6).setValue(saldoBaru);
+      break;
+    }
+  }
+
+  const uoSheet = getUserOrdersSheet();
+  uoSheet.appendRow([
+    user_id,
+    order_id,
+    harga_order,
+    poin_dipakai,
+    diskon_poin,
+    harga_dibayar,
+    poin_didapat,
+    new Date().toISOString(),
+  ]);
+
+  const userSheet2 = getUserSheet();
+  const userRows2 = userSheet2.getDataRange().getValues();
+  let kodeReferral = "";
+  for (let i = 1; i < userRows2.length; i++) {
+    if (userRows2[i][0] === user_id) {
+      kodeReferral = userRows2[i][3];
+      break;
+    }
+  }
+
+  if (!kodeReferral) return;
+
+  const affSheet = getAffiliateSheet();
+  const affRows = affSheet.getDataRange().getValues();
+  let affiliateId = "";
+  for (let i = 1; i < affRows.length; i++) {
+    if (affRows[i][1] === kodeReferral) {
+      affiliateId = affRows[i][0];
+      break;
+    }
+  }
+
+  if (!affiliateId) return;
+
+  const commSheet = getAffiliateCommissionsSheet();
+  const commRows = commSheet.getDataRange().getValues();
+  let orderKe = 1;
+  for (let i = 1; i < commRows.length; i++) {
+    if (commRows[i][0] === affiliateId && commRows[i][1] === user_id) {
+      orderKe++;
+    }
+  }
+
+  if (orderKe > 10) return;
+
+  const persenKomisi = hitungKomisiAffiliate(orderKe);
+  const nominalKomisi = Math.floor(harga_order * persenKomisi);
+
+  commSheet.appendRow([
+    affiliateId,
+    user_id,
+    order_id,
+    orderKe,
+    harga_order,
+    persenKomisi * 100,
+    nominalKomisi,
+    new Date().toISOString(),
+  ]);
+
+  for (let i = 1; i < affRows.length; i++) {
+    if (affRows[i][0] === affiliateId) {
+      const saldoSekarang = Number(affRows[i][5]) || 0;
+      affSheet.getRange(i + 1, 6).setValue(saldoSekarang + nominalKomisi);
+      break;
+    }
+  }
+}
+
+// ─── Request Pencairan ────────────────────────────────────────
+function handleRequestWithdrawal(data) {
+  if (
+    !data.affiliate_id ||
+    !data.nominal ||
+    !data.rekening_bank ||
+    !data.nomor_rekening ||
+    !data.atas_nama
+  )
+    return jsonResponse({ success: false, message: "Data tidak lengkap" });
+
+  if (data.nominal < 50000)
+    return jsonResponse({
+      success: false,
+      message: "Minimal pencairan Rp 50.000",
+    });
+
+  const affSheet = getAffiliateSheet();
+  const affRows = affSheet.getDataRange().getValues();
+  for (let i = 1; i < affRows.length; i++) {
+    if (affRows[i][0] === data.affiliate_id) {
+      const saldo = Number(affRows[i][5]) || 0;
+      if (saldo < data.nominal) {
+        return jsonResponse({
+          success: false,
+          message: "Saldo komisi tidak cukup",
+        });
+      }
+
+      const withdrawalId = generateWithdrawalId();
+      const wdSheet = getWithdrawalSheet();
+      wdSheet.appendRow([
+        withdrawalId,
+        data.affiliate_id,
+        data.nominal,
+        data.rekening_bank,
+        data.nomor_rekening,
+        data.atas_nama,
+        "pending",
+        new Date().toISOString(),
+        "",
+      ]);
+
+      affSheet.getRange(i + 1, 6).setValue(saldo - data.nominal);
+      return jsonResponse({
+        success: true,
+        withdrawal_id: withdrawalId,
+        message: "Request pencairan berhasil dikirim",
+      });
+    }
+  }
+
+  return jsonResponse({ success: false, message: "Affiliate tidak ditemukan" });
+}
+
+// ─── Approve/Reject Withdrawal (Admin) ───────────────────────
+function handleApproveWithdrawal(withdrawal_id, action) {
+  if (!withdrawal_id || !action)
+    return jsonResponse({ success: false, message: "Parameter kurang" });
+
+  const wdSheet = getWithdrawalSheet();
+  const wdRows = wdSheet.getDataRange().getValues();
+
+  for (let i = 1; i < wdRows.length; i++) {
+    if (wdRows[i][0] === withdrawal_id) {
+      if (wdRows[i][6] !== "pending") {
+        return jsonResponse({
+          success: false,
+          message: "Request sudah diproses sebelumnya",
+        });
+      }
+
+      if (action === "approve") {
+        wdSheet.getRange(i + 1, 7).setValue("approved");
+        wdSheet.getRange(i + 1, 9).setValue(new Date().toISOString());
+        return jsonResponse({ success: true, message: "Pencairan disetujui" });
+      } else if (action === "reject") {
+        wdSheet.getRange(i + 1, 7).setValue("rejected");
+        wdSheet.getRange(i + 1, 9).setValue(new Date().toISOString());
+
+        const affSheet = getAffiliateSheet();
+        const affRows = affSheet.getDataRange().getValues();
+        for (let j = 1; j < affRows.length; j++) {
+          if (affRows[j][0] === wdRows[i][1]) {
+            const saldo = Number(affRows[j][5]) || 0;
+            affSheet.getRange(j + 1, 6).setValue(saldo + wdRows[i][2]);
+            break;
+          }
+        }
+        return jsonResponse({
+          success: true,
+          message: "Pencairan ditolak, saldo dikembalikan",
+        });
+      }
+    }
+  }
+
+  return jsonResponse({ success: false, message: "Request tidak ditemukan" });
 }

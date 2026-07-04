@@ -1,0 +1,350 @@
+import { useEffect, useState } from "react";
+import { Layout } from "@/components/layout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Users,
+  DollarSign,
+  LogOut,
+  Loader2,
+  AlertCircle,
+  Copy,
+  CheckCircle,
+} from "lucide-react";
+import {
+  useGetAffiliateAccount,
+  useRequestWithdrawal,
+  formatRupiah,
+} from "@/hooks/use-orders";
+import { useToast } from "@/hooks/use-toast";
+
+export default function AffiliatePage() {
+  const { toast } = useToast();
+  const [affiliateId, setAffiliateId] = useState<string | null>(null);
+  const [showWithdrawal, setShowWithdrawal] = useState(false);
+  const [withdrawalForm, setWithdrawalForm] = useState({
+    nominal: "",
+    rekening_bank: "",
+    nomor_rekening: "",
+    atas_nama: "",
+  });
+  const [copied, setCopied] = useState(false);
+
+  const requestWithdrawal = useRequestWithdrawal();
+
+  useEffect(() => {
+    const stored = localStorage.getItem("tugasly_affiliate_id");
+    if (!stored) {
+      window.location.href = "/login-affiliate";
+      return;
+    }
+    setAffiliateId(stored);
+  }, []);
+
+  const {
+    data: akun,
+    isLoading,
+    isError,
+    error,
+  } = useGetAffiliateAccount(affiliateId || "");
+
+  function handleLogout() {
+    localStorage.removeItem("tugasly_affiliate_id");
+    localStorage.removeItem("tugasly_affiliate_nama");
+    window.location.href = "/login-affiliate";
+  }
+
+  function copyReferralCode() {
+    if (akun?.kode_referral) {
+      navigator.clipboard.writeText(akun.kode_referral);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  async function handleWithdrawal(e: React.FormEvent) {
+    e.preventDefault();
+    if (!affiliateId) return;
+
+    const nominal = Number(withdrawalForm.nominal);
+    if (nominal < 50000) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Minimal pencairan Rp 50.000",
+      });
+      return;
+    }
+
+    try {
+      await requestWithdrawal.mutateAsync({
+        affiliate_id: affiliateId,
+        nominal,
+        rekening_bank: withdrawalForm.rekening_bank,
+        nomor_rekening: withdrawalForm.nomor_rekening,
+        atas_nama: withdrawalForm.atas_nama,
+      });
+      toast({
+        title: "Berhasil",
+        description: "Request pencairan berhasil dikirim ke admin",
+      });
+      setShowWithdrawal(false);
+      setWithdrawalForm({
+        nominal: "",
+        rekening_bank: "",
+        nomor_rekening: "",
+        atas_nama: "",
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Gagal",
+        description: err.message,
+      });
+    }
+  }
+
+  if (!affiliateId || isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Layout>
+        <div className="max-w-md mx-auto py-10">
+          <Alert className="bg-red-50 border-red-200">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            <AlertDescription className="text-red-700">
+              {(error as Error).message}
+            </AlertDescription>
+          </Alert>
+          <Button
+            variant="outline"
+            className="w-full mt-4"
+            onClick={handleLogout}
+          >
+            Kembali ke Login
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="max-w-2xl mx-auto py-10 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-slate-900">
+            Dashboard Affiliate
+          </h1>
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            <LogOut className="w-4 h-4 mr-2" /> Keluar
+          </Button>
+        </div>
+
+        {/* Identitas & Kode Referral */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="w-4 h-4" /> Informasi Affiliate
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Affiliate ID</span>
+              <span className="font-mono font-medium text-slate-800">
+                {akun?.affiliate_id}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Nama</span>
+              <span className="font-medium text-slate-800">{akun?.nama}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">WhatsApp</span>
+              <span className="font-medium text-slate-800">{akun?.wa}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-500">Kode Referral</span>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="font-mono text-primary border-primary"
+                >
+                  {akun?.kode_referral}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={copyReferralCode}
+                >
+                  {copied ? (
+                    <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Saldo Komisi */}
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Saldo Komisi</p>
+                  <p className="text-2xl font-bold text-green-700">
+                    {formatRupiah(akun?.saldo_komisi ?? 0)}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    Minimal pencairan Rp 50.000
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+                disabled={(akun?.saldo_komisi ?? 0) < 50000}
+                onClick={() => setShowWithdrawal(!showWithdrawal)}
+              >
+                Cairkan
+              </Button>
+            </div>
+
+            {showWithdrawal && (
+              <form
+                onSubmit={handleWithdrawal}
+                className="mt-4 space-y-3 border-t border-green-200 pt-4"
+              >
+                <p className="text-sm font-semibold text-slate-700">
+                  Form Pencairan
+                </p>
+                <Input
+                  placeholder="Nominal (min. 50000)"
+                  type="number"
+                  value={withdrawalForm.nominal}
+                  onChange={(e) =>
+                    setWithdrawalForm({
+                      ...withdrawalForm,
+                      nominal: e.target.value,
+                    })
+                  }
+                />
+                <Input
+                  placeholder="Nama Bank (misal: BCA, BRI, GoPay)"
+                  value={withdrawalForm.rekening_bank}
+                  onChange={(e) =>
+                    setWithdrawalForm({
+                      ...withdrawalForm,
+                      rekening_bank: e.target.value,
+                    })
+                  }
+                />
+                <Input
+                  placeholder="Nomor Rekening / No. HP"
+                  value={withdrawalForm.nomor_rekening}
+                  onChange={(e) =>
+                    setWithdrawalForm({
+                      ...withdrawalForm,
+                      nomor_rekening: e.target.value,
+                    })
+                  }
+                />
+                <Input
+                  placeholder="Atas Nama"
+                  value={withdrawalForm.atas_nama}
+                  onChange={(e) =>
+                    setWithdrawalForm({
+                      ...withdrawalForm,
+                      atas_nama: e.target.value,
+                    })
+                  }
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    type="button"
+                    onClick={() => setShowWithdrawal(false)}
+                  >
+                    Batal
+                  </Button>
+                  <Button
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    type="submit"
+                    disabled={requestWithdrawal.isPending}
+                  >
+                    {requestWithdrawal.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "Kirim Request"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Riwayat Komisi */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Riwayat Komisi</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!akun?.commissions || akun.commissions.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">
+                Belum ada komisi.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {akun.commissions.map((comm, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">
+                        {comm.order_id}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Order ke-{comm.order_ke} dari {comm.user_id} ·{" "}
+                        {comm.persen_komisi}%
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {new Date(comm.created_at).toLocaleDateString("id-ID", {
+                          day: "2-digit",
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </div>
+                    <p className="text-sm font-bold text-green-700">
+                      +{formatRupiah(comm.nominal_komisi)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </Layout>
+  );
+}

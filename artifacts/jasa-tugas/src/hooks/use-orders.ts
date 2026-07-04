@@ -306,3 +306,133 @@ export function formatRupiah(amount: number): string {
     minimumFractionDigits: 0,
   }).format(amount);
 }
+
+// ─── User Account Types ───────────────────────────────────────
+export interface UserAccount {
+  user_id: string;
+  nama: string;
+  wa: string;
+  kode_referral?: string;
+  saldo_poin: number;
+  created_at: string;
+  orders: UserOrder[];
+}
+
+export interface UserOrder {
+  order_id: string;
+  harga_order: number;
+  poin_dipakai: number;
+  diskon_poin: number;
+  harga_dibayar: number;
+  poin_didapat: number;
+  created_at: string;
+}
+
+export interface AffiliateAccount {
+  affiliate_id: string;
+  kode_referral: string;
+  nama: string;
+  wa: string;
+  saldo_komisi: number;
+  commissions: AffiliateCommission[];
+}
+
+export interface AffiliateCommission {
+  user_id: string;
+  order_id: string;
+  order_ke: number;
+  harga_order: number;
+  persen_komisi: number;
+  nominal_komisi: number;
+  created_at: string;
+}
+
+// ─── User Hooks ───────────────────────────────────────────────
+export function useRegisterUser() {
+  return useMutation({
+    mutationFn: async (data: {
+      nama: string;
+      wa: string;
+      kode_referral?: string;
+    }) => {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: "registerUser", data }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal registrasi");
+      return json;
+    },
+  });
+}
+
+export function useGetUserAccount(user_id: string) {
+  return useQuery({
+    queryKey: ["userAccount", user_id],
+    queryFn: async () => {
+      const res = await fetch(
+        `${API_URL}?action=getUserAccount&user_id=${user_id}`,
+      );
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "User tidak ditemukan");
+      return json.data as UserAccount;
+    },
+    enabled: !!user_id,
+  });
+}
+
+export function useRegisterAffiliate() {
+  return useMutation({
+    mutationFn: async (data: { nama: string; wa: string }) => {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: "registerAffiliate", data }),
+      });
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "Gagal registrasi affiliate");
+      return json;
+    },
+  });
+}
+
+export function useGetAffiliateAccount(affiliate_id: string) {
+  return useQuery({
+    queryKey: ["affiliateAccount", affiliate_id],
+    queryFn: async () => {
+      const res = await fetch(
+        `${API_URL}?action=getAffiliateAccount&affiliate_id=${affiliate_id}`,
+      );
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "Affiliate tidak ditemukan");
+      return json.data as AffiliateAccount;
+    },
+    enabled: !!affiliate_id,
+  });
+}
+
+export function useRequestWithdrawal() {
+  return useMutation({
+    mutationFn: async (data: {
+      affiliate_id: string;
+      nominal: number;
+      rekening_bank: string;
+      nomor_rekening: string;
+      atas_nama: string;
+    }) => {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: "requestWithdrawal", data }),
+      });
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "Gagal request pencairan");
+      return json;
+    },
+  });
+}
