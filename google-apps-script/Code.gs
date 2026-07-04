@@ -50,6 +50,30 @@ const COLUMNS = {
   CEK_FILE_AT: 26,
 };
 
+const USER_COLUMNS = {
+  USER_ID: 1,
+  NAMA: 2,
+  WA: 3,
+  KODE_REFERRAL: 4,
+  STATUS: 5,
+  SALDO_POIN: 6,
+  CREATED_AT: 7,
+  APPROVED_AT: 8,
+  WA_SENT: 9,
+};
+
+const AFFILIATE_COLUMNS = {
+  AFFILIATE_ID: 1,
+  KODE_REFERRAL: 2,
+  NAMA: 3,
+  WA: 4,
+  STATUS: 5,
+  SALDO_KOMISI: 6,
+  CREATED_AT: 7,
+  APPROVED_AT: 8,
+  WA_SENT: 9,
+};
+
 const VALID_STATUSES = [
   "verifikasi tugas",
   "menunggu pembayaran dp",
@@ -162,6 +186,8 @@ function doGet(e) {
       return handleGetUserAccount(e.parameter.user_id);
     if (action === "getAffiliateAccount")
       return handleGetAffiliateAccount(e.parameter.affiliate_id);
+    if (action === "getAllUsers") return handleGetAllUsers();
+    if (action === "getAllAffiliates") return handleGetAllAffiliates();
     if (action === "checkWa") return handleCheckWa(e.parameter.wa);
 
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
@@ -219,6 +245,8 @@ function doPost(e) {
       return handleApproveWithdrawal(body.withdrawal_id, body.action_type);
     if (body.action === "registerToken") return handleRegisterToken(body.token);
     if (body.action === "deleteToken") return handleDeleteToken(body.token);
+    if (body.action === "markWaSent")
+      return handleMarkWaSent(body.type, body.id);
 
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
@@ -898,12 +926,13 @@ function handleRegisterUser(data) {
   sheet.appendRow([
     userId,
     data.nama,
-    String(data.wa),
+    "'" + String(data.wa),
     data.kode_referral || "",
     "pending",
     0,
     new Date().toISOString(),
     "",
+    false,
   ]);
 
   return jsonResponse({
@@ -1033,11 +1062,12 @@ function handleRegisterAffiliate(data) {
     affiliateId,
     kodeReferral,
     data.nama,
-    String(data.wa),
+    "'" + String(data.wa),
     "pending",
     0,
     new Date().toISOString(),
     "",
+    false,
   ]);
 
   return jsonResponse({
@@ -1316,4 +1346,76 @@ function handleApproveWithdrawal(withdrawal_id, action) {
   }
 
   return jsonResponse({ success: false, message: "Request tidak ditemukan" });
+}
+
+// ─── Get All Users (Admin) ────────────────────────────────────
+function handleGetAllUsers() {
+  const sheet = getUserSheet();
+  const rows = sheet.getDataRange().getValues();
+  const users = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (!rows[i][0]) continue;
+    users.push({
+      user_id: rows[i][USER_COLUMNS.USER_ID - 1],
+      nama: rows[i][USER_COLUMNS.NAMA - 1],
+      wa: String(rows[i][USER_COLUMNS.WA - 1]).replace(/^'/, ""),
+      kode_referral: rows[i][USER_COLUMNS.KODE_REFERRAL - 1] || "",
+      status: rows[i][USER_COLUMNS.STATUS - 1],
+      saldo_poin: rows[i][USER_COLUMNS.SALDO_POIN - 1] || 0,
+      created_at: rows[i][USER_COLUMNS.CREATED_AT - 1],
+      approved_at: rows[i][USER_COLUMNS.APPROVED_AT - 1] || "",
+      wa_sent: rows[i][USER_COLUMNS.WA_SENT - 1] || false,
+    });
+  }
+  return jsonResponse({ success: true, data: users });
+}
+
+// ─── Get All Affiliates (Admin) ───────────────────────────────
+function handleGetAllAffiliates() {
+  const sheet = getAffiliateSheet();
+  const rows = sheet.getDataRange().getValues();
+  const affiliates = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (!rows[i][0]) continue;
+    affiliates.push({
+      affiliate_id: rows[i][AFFILIATE_COLUMNS.AFFILIATE_ID - 1],
+      kode_referral: rows[i][AFFILIATE_COLUMNS.KODE_REFERRAL - 1],
+      nama: rows[i][AFFILIATE_COLUMNS.NAMA - 1],
+      wa: String(rows[i][AFFILIATE_COLUMNS.WA - 1]).replace(/^'/, ""),
+      status: rows[i][AFFILIATE_COLUMNS.STATUS - 1],
+      saldo_komisi: rows[i][AFFILIATE_COLUMNS.SALDO_KOMISI - 1] || 0,
+      created_at: rows[i][AFFILIATE_COLUMNS.CREATED_AT - 1],
+      approved_at: rows[i][AFFILIATE_COLUMNS.APPROVED_AT - 1] || "",
+      wa_sent: rows[i][AFFILIATE_COLUMNS.WA_SENT - 1] || false,
+    });
+  }
+  return jsonResponse({ success: true, data: affiliates });
+}
+
+// ─── Mark WA Sent ─────────────────────────────────────────────
+function handleMarkWaSent(type, id) {
+  if (!type || !id)
+    return jsonResponse({ success: false, message: "Parameter kurang" });
+
+  if (type === "user") {
+    const sheet = getUserSheet();
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] === id) {
+        sheet.getRange(i + 1, USER_COLUMNS.WA_SENT).setValue(true);
+        return jsonResponse({ success: true });
+      }
+    }
+  } else if (type === "affiliate") {
+    const sheet = getAffiliateSheet();
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] === id) {
+        sheet.getRange(i + 1, AFFILIATE_COLUMNS.WA_SENT).setValue(true);
+        return jsonResponse({ success: true });
+      }
+    }
+  }
+
+  return jsonResponse({ success: false, message: "Data tidak ditemukan" });
 }

@@ -1,0 +1,7 @@
+- [x] Perubahan 1: Tambahkan USER_COLUMNS dan AFFILIATE_COLUMNS setelah COLUMNS
+- [x] Perubahan 2: Update handleRegisterUser appendRow (format WA + WA_SENT=false)
+- [x] Perubahan 3: Update handleRegisterAffiliate appendRow (format WA + WA_SENT=false)
+- [x] Perubahan 4: Tambahkan handleGetAllUsers, handleGetAllAffiliates, handleMarkWaSent di bagian bawah
+- [x] Perubahan 5: Update doGet dengan action getAllUsers & getAllAffiliates
+- [x] Perubahan 6: Update doPost dengan action markWaSent
+- [ ] Verifikasi: tidak ada perubahan lain selain yang diminta

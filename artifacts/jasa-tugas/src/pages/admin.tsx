@@ -21,8 +21,15 @@ import {
   useGetAllOrders,
   useUpdateOrder,
   useUploadBukti,
+  useGetAllUsers,
+  useGetAllAffiliates,
+  useApproveUser,
+  useApproveAffiliate,
+  useMarkWaSent,
   type Order,
   type OrderStatus,
+  type UserData,
+  type AffiliateData,
   formatRupiah,
   hitungEstimasiSelesai,
   formatEstimasi,
@@ -314,8 +321,8 @@ function AdminActionCell({
           </div>
         )}
         {order.revisi_file_urls &&
-          String(order.revisi_file_urls).trim() &&
           String(order.revisi_file_urls)
+            .trim()
             .split(",")
             .filter(Boolean)
             .map((url, i) => (
@@ -463,6 +470,27 @@ function AdminDashboard() {
     penyesuaianNominal: string;
     penyesuaianKeterangan: string;
   } | null>(null);
+
+  const [activeTab, setActiveTab] = useState<
+    "pesanan" | "users" | "affiliates"
+  >("pesanan");
+  const [approvedUser, setApprovedUser] = useState<UserData | null>(null);
+  const [approvedAffiliate, setApprovedAffiliate] =
+    useState<AffiliateData | null>(null);
+
+  const { data: allUsers = [], refetch: refetchUsers } = useGetAllUsers();
+  const { data: allAffiliates = [], refetch: refetchAffiliates } =
+    useGetAllAffiliates();
+  const approveUser = useApproveUser();
+  const approveAffiliate = useApproveAffiliate();
+  const markWaSent = useMarkWaSent();
+
+  const pendingUsersCount = allUsers.filter(
+    (u) => u.status === "pending",
+  ).length;
+  const pendingAffiliatesCount = allAffiliates.filter(
+    (a) => a.status === "pending",
+  ).length;
 
   async function handleAction(
     orderId: string,
@@ -707,6 +735,7 @@ function AdminDashboard() {
             </div>
           );
         })()}
+
       {uploadDialog?.type === "hasil_pertama" && (
         <UploadDialog
           orderId={uploadDialog.orderId}
@@ -719,6 +748,7 @@ function AdminDashboard() {
           onCancel={() => setUploadDialog(null)}
         />
       )}
+
       {uploadDialog?.type === "hasil_revisi" && (
         <UploadDialog
           orderId={uploadDialog.orderId}
@@ -732,287 +762,732 @@ function AdminDashboard() {
         />
       )}
 
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">
-              Admin Dashboard
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Ikuti alur tombol di setiap baris — tidak bisa loncat langkah.
-            </p>
-          </div>
-          <Button
-            onClick={() => refetch()}
-            variant="outline"
-            disabled={isFetching}
-            className="w-full sm:w-auto"
-          >
-            <RefreshCw
-              className={"w-4 h-4 mr-2 " + (isFetching ? "animate-spin" : "")}
-            />
-            Refresh
-          </Button>
-        </div>
+      <div className="flex gap-2 border-b border-slate-200 mb-4">
+        <button
+          onClick={() => setActiveTab("pesanan")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "pesanan"
+              ? "border-primary text-primary"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Pesanan
+        </button>
+        <button
+          onClick={() => setActiveTab("users")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+            activeTab === "users"
+              ? "border-primary text-primary"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Users
+          {pendingUsersCount > 0 && (
+            <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              {pendingUsersCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("affiliates")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+            activeTab === "affiliates"
+              ? "border-primary text-primary"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Affiliates
+          {pendingAffiliatesCount > 0 && (
+            <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              {pendingAffiliatesCount}
+            </span>
+          )}
+        </button>
+      </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {activeTab === "pesanan" && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">
+                Admin Dashboard
+              </h1>
+              <p className="text-sm text-slate-500 mt-1">
+                Ikuti alur tombol di setiap baris — tidak bisa loncat langkah.
+              </p>
+            </div>
+            <Button
+              onClick={() => refetch()}
+              variant="outline"
+              disabled={isFetching}
+              className="w-full sm:w-auto"
+            >
+              <RefreshCw
+                className={"w-4 h-4 mr-2 " + (isFetching ? "animate-spin" : "")}
+              />
+              Refresh
+            </Button>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Card className="bg-slate-50 border-slate-200">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-slate-500 mb-1">
+                  Total Order
+                </p>
+                <p className="text-2xl font-bold">{orders.length}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-orange-50 border-orange-200">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-orange-700 mb-1">
+                  Perlu Tindakan
+                </p>
+                <p className="text-2xl font-bold text-orange-800">
+                  {needsAction}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-blue-700 mb-1">
+                  Dikerjakan
+                </p>
+                <p className="text-2xl font-bold text-blue-800">
+                  {count("proses pengerjaan")}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="bg-green-50 border-green-200">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-green-700 mb-1">
+                  Selesai
+                </p>
+                <p className="text-2xl font-bold text-green-800">
+                  {count("selesai")}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Alur referensi */}
           <Card className="bg-slate-50 border-slate-200">
             <CardContent className="p-4">
-              <p className="text-xs font-medium text-slate-500 mb-1">
-                Total Order
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                Alur Status
               </p>
-              <p className="text-2xl font-bold">{orders.length}</p>
+              <div className="flex flex-wrap items-center gap-1 text-xs text-slate-600">
+                {[
+                  "Verifikasi Tugas",
+                  "Menunggu Pembayaran DP",
+                  "Proses Pengerjaan",
+                  "Menunggu Pelunasan",
+                  "Pelunasan Diterima",
+                  "Cek File",
+                  "Revisi",
+                  "Selesai",
+                ].map((s, i, arr) => (
+                  <React.Fragment key={s}>
+                    <span className="bg-white border border-slate-200 rounded px-2 py-0.5">
+                      {s}
+                    </span>
+                    {i < arr.length - 1 && (
+                      <ChevronRight className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
             </CardContent>
           </Card>
-          <Card className="bg-orange-50 border-orange-200">
-            <CardContent className="p-4">
-              <p className="text-xs font-medium text-orange-700 mb-1">
-                Perlu Tindakan
-              </p>
-              <p className="text-2xl font-bold text-orange-800">
-                {needsAction}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="p-4">
-              <p className="text-xs font-medium text-blue-700 mb-1">
-                Dikerjakan
-              </p>
-              <p className="text-2xl font-bold text-blue-800">
-                {count("proses pengerjaan")}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="bg-green-50 border-green-200">
-            <CardContent className="p-4">
-              <p className="text-xs font-medium text-green-700 mb-1">Selesai</p>
-              <p className="text-2xl font-bold text-green-800">
-                {count("selesai")}
-              </p>
+
+          {/* Tabel */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Daftar Pesanan</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isLoading ? (
+                <div className="py-12 flex justify-center items-center text-slate-500">
+                  <Loader2 className="w-8 h-8 animate-spin mr-2" /> Memuat
+                  data...
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="py-12 text-center text-slate-500">
+                  Belum ada pesanan masuk.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[140px]">Order ID</TableHead>
+                        <TableHead>Nama & WA</TableHead>
+                        <TableHead>Tugas</TableHead>
+                        <TableHead>Harga</TableHead>
+                        <TableHead>Catatan & File</TableHead>
+                        <TableHead className="w-[240px]">
+                          Status & Aksi Admin
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orders.map((order) => (
+                        <TableRow
+                          key={order.order_id}
+                          className={
+                            [
+                              "verifikasi tugas",
+                              "proses pengerjaan",
+                              "revisi",
+                            ].includes(order.status)
+                              ? "bg-orange-50/30"
+                              : ""
+                          }
+                        >
+                          <TableCell>
+                            <div className="font-mono text-xs text-slate-700 break-all">
+                              {order.order_id}
+                            </div>
+                            {order.created_at && (
+                              <div className="text-xs text-slate-400 mt-0.5">
+                                {new Date(order.created_at).toLocaleDateString(
+                                  "id-ID",
+                                  {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "2-digit",
+                                  },
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium text-sm">
+                              {order.nama}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {order.wa}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="mb-1 text-xs">
+                              {order.jenis}
+                            </Badge>
+                            <div className="text-xs text-slate-500">
+                              {order.halaman} hal/slide
+                            </div>
+                            {order.tipe_order &&
+                              order.tipe_order !== "standar" && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs mt-1 capitalize"
+                                >
+                                  {order.tipe_order}
+                                </Badge>
+                              )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <div className="font-medium">
+                              {order.harga
+                                ? formatRupiah(Number(order.harga))
+                                : "-"}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              DP:{" "}
+                              {order.dp ? formatRupiah(Number(order.dp)) : "-"}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              Sisa:{" "}
+                              {order.sisa_bayar
+                                ? formatRupiah(Number(order.sisa_bayar))
+                                : "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1.5 min-w-[110px]">
+                              {order.note && String(order.note).trim() && (
+                                <button
+                                  onClick={() =>
+                                    downloadTxt(
+                                      "catatan-order-" +
+                                        order.order_id +
+                                        ".txt",
+                                      String(order.note),
+                                    )
+                                  }
+                                  className="flex items-center gap-1 text-xs text-slate-600 hover:text-primary transition-colors text-left"
+                                >
+                                  <FileText className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
+                                  <span className="underline underline-offset-2">
+                                    Catatan Order.txt
+                                  </span>
+                                </button>
+                              )}
+                              {order.file_tugas_url &&
+                                String(order.file_tugas_url).trim() && (
+                                  <a
+                                    href={String(order.file_tugas_url).trim()}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                                  >
+                                    <ExternalLink className="w-3 h-3" /> File
+                                    Pendukung
+                                  </a>
+                                )}
+                              {order.hasil_url && (
+                                <a
+                                  href={order.hasil_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-green-600 hover:underline flex items-center gap-1"
+                                >
+                                  <ExternalLink className="w-3 h-3" /> Hasil
+                                </a>
+                              )}
+                              {!order.note &&
+                                !order.file_tugas_url &&
+                                !order.hasil_url && (
+                                  <span className="text-xs text-slate-400">
+                                    -
+                                  </span>
+                                )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-2">
+                              <Badge
+                                variant="outline"
+                                className={
+                                  "text-xs w-full text-center justify-center " +
+                                  statusCls(order.status)
+                                }
+                              >
+                                {STATUS_LABEL[order.status] || order.status}
+                              </Badge>
+                              <AdminActionCell
+                                order={order}
+                                onOpenUpload={(orderId, type) =>
+                                  setUploadDialog({ orderId, type })
+                                }
+                                onOpenVerifikasi={(order) =>
+                                  setVerifikasiDialog({
+                                    order,
+                                    step: 1,
+                                    penyesuaianNominal: "",
+                                    penyesuaianKeterangan: "",
+                                  })
+                                }
+                                loading={loadingOrderId === order.order_id}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+      )}
 
-        {/* Alur referensi */}
-        <Card className="bg-slate-50 border-slate-200">
-          <CardContent className="p-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              Alur Status
-            </p>
-            <div className="flex flex-wrap items-center gap-1 text-xs text-slate-600">
-              {[
-                "Verifikasi Tugas",
-                "Menunggu Pembayaran DP",
-                "Proses Pengerjaan",
-                "Menunggu Pelunasan",
-                "Pelunasan Diterima",
-                "Cek File",
-                "Revisi",
-                "Selesai",
-              ].map((s, i, arr) => (
-                <React.Fragment key={s}>
-                  <span className="bg-white border border-slate-200 rounded px-2 py-0.5">
-                    {s}
-                  </span>
-                  {i < arr.length - 1 && (
-                    <ChevronRight className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                  )}
-                </React.Fragment>
-              ))}
+      {activeTab === "users" && (
+        <div className="space-y-4">
+          {approvedUser && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+                <h3 className="font-semibold text-slate-800 text-lg">
+                  User Disetujui!
+                </h3>
+                <p className="text-sm text-slate-500">
+                  Kirim User ID berikut ke WhatsApp customer.
+                </p>
+                <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Nama</span>
+                    <span className="font-medium">{approvedUser.nama}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">User ID</span>
+                    <span className="font-mono font-bold text-primary">
+                      {approvedUser.user_id}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">WA</span>
+                    <span className="font-medium">{approvedUser.wa}</span>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setApprovedUser(null)}
+                  >
+                    Nanti
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={() => {
+                      const pesan = `Halo ${approvedUser.nama},\nAkun Tugasly Anda sudah aktif.\n\nUser ID: ${approvedUser.user_id}\nLogin di: tugasly.my.id/login-user\n\nSimpan ID ini baik-baik.`;
+                      window.open(
+                        `https://wa.me/62${approvedUser.wa.replace(/^0/, "")}?text=${encodeURIComponent(pesan)}`,
+                        "_blank",
+                      );
+                      markWaSent.mutateAsync({
+                        type: "user",
+                        id: approvedUser.user_id,
+                      });
+                      setApprovedUser(null);
+                      refetchUsers();
+                    }}
+                  >
+                    Kirim via WA
+                  </Button>
+                </div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Tabel */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Daftar Pesanan</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="py-12 flex justify-center items-center text-slate-500">
-                <Loader2 className="w-8 h-8 animate-spin mr-2" /> Memuat data...
-              </div>
-            ) : orders.length === 0 ? (
-              <div className="py-12 text-center text-slate-500">
-                Belum ada pesanan masuk.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[140px]">Order ID</TableHead>
-                      <TableHead>Nama & WA</TableHead>
-                      <TableHead>Tugas</TableHead>
-                      <TableHead>Harga</TableHead>
-                      <TableHead>Catatan & File</TableHead>
-                      <TableHead className="w-[240px]">
-                        Status & Aksi Admin
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orders.map((order) => (
-                      <TableRow
-                        key={order.order_id}
-                        className={
-                          [
-                            "verifikasi tugas",
-                            "proses pengerjaan",
-                            "revisi",
-                          ].includes(order.status)
-                            ? "bg-orange-50/30"
-                            : ""
-                        }
-                      >
-                        <TableCell>
-                          <div className="font-mono text-xs text-slate-700 break-all">
-                            {order.order_id}
-                          </div>
-                          {order.created_at && (
-                            <div className="text-xs text-slate-400 mt-0.5">
-                              {new Date(order.created_at).toLocaleDateString(
-                                "id-ID",
-                                {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "2-digit",
-                                },
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium text-sm">
-                            {order.nama}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {order.wa}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="mb-1 text-xs">
-                            {order.jenis}
-                          </Badge>
-                          <div className="text-xs text-slate-500">
-                            {order.halaman} hal/slide
-                          </div>
-                          {order.tipe_order &&
-                            order.tipe_order !== "standar" && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs mt-1 capitalize"
-                              >
-                                {order.tipe_order}
-                              </Badge>
-                            )}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <div className="font-medium">
-                            {order.harga
-                              ? formatRupiah(Number(order.harga))
-                              : "-"}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            DP:{" "}
-                            {order.dp ? formatRupiah(Number(order.dp)) : "-"}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            Sisa:{" "}
-                            {order.sisa_bayar
-                              ? formatRupiah(Number(order.sisa_bayar))
-                              : "-"}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1.5 min-w-[110px]">
-                            {order.note && String(order.note).trim() && (
-                              <button
-                                onClick={() =>
-                                  downloadTxt(
-                                    "catatan-order-" + order.order_id + ".txt",
-                                    String(order.note),
-                                  )
-                                }
-                                className="flex items-center gap-1 text-xs text-slate-600 hover:text-primary transition-colors text-left"
-                              >
-                                <FileText className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
-                                <span className="underline underline-offset-2">
-                                  Catatan Order.txt
-                                </span>
-                              </button>
-                            )}
-                            {order.file_tugas_url &&
-                              String(order.file_tugas_url).trim() && (
-                                <a
-                                  href={String(order.file_tugas_url).trim()}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                                >
-                                  <ExternalLink className="w-3 h-3" /> File
-                                  Pendukung
-                                </a>
-                              )}
-                            {order.hasil_url && (
-                              <a
-                                href={order.hasil_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-green-600 hover:underline flex items-center gap-1"
-                              >
-                                <ExternalLink className="w-3 h-3" /> Hasil
-                              </a>
-                            )}
-                            {!order.note &&
-                              !order.file_tugas_url &&
-                              !order.hasil_url && (
-                                <span className="text-xs text-slate-400">
-                                  -
-                                </span>
-                              )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-2">
-                            <Badge
-                              variant="outline"
-                              className={
-                                "text-xs w-full text-center justify-center " +
-                                statusCls(order.status)
-                              }
+          )}
+          <h2 className="text-xl font-bold text-slate-900">Daftar Users</h2>
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    User ID
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Nama
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    WA
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Kode Referral
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Poin
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Status
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    WA Sent
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Tanggal
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {allUsers.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="text-center py-8 text-slate-400"
+                    >
+                      Belum ada user terdaftar
+                    </td>
+                  </tr>
+                ) : (
+                  allUsers.map((user) => (
+                    <tr key={user.user_id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                        {user.user_id}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-800">
+                        {user.nama}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{user.wa}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {user.kode_referral || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {user.saldo_poin}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          variant="outline"
+                          className={
+                            user.status === "active"
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                          }
+                        >
+                          {user.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          variant="outline"
+                          className={
+                            user.wa_sent
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-slate-50 text-slate-500 border-slate-200"
+                          }
+                        >
+                          {user.wa_sent ? "Terkirim" : "Belum"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        {new Date(user.created_at).toLocaleDateString("id-ID")}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          {user.status === "pending" && (
+                            <Button
+                              size="sm"
+                              disabled={approveUser.isPending}
+                              onClick={async () => {
+                                await approveUser.mutateAsync(user.user_id);
+                                await refetchUsers();
+                                setApprovedUser({
+                                  ...user,
+                                  status: "active",
+                                });
+                              }}
                             >
-                              {STATUS_LABEL[order.status] || order.status}
-                            </Badge>
-                            <AdminActionCell
-                              order={order}
-                              onOpenUpload={(orderId, type) =>
-                                setUploadDialog({ orderId, type })
-                              }
-                              onOpenVerifikasi={(order) =>
-                                setVerifikasiDialog({
-                                  order,
-                                  step: 1,
-                                  penyesuaianNominal: "",
-                                  penyesuaianKeterangan: "",
-                                })
-                              }
-                              loading={loadingOrderId === order.order_id}
-                            />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                              Approve
+                            </Button>
+                          )}
+                          {user.status === "active" && !user.wa_sent && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const pesan = `Halo ${user.nama},\nAkun Tugasly Anda sudah aktif.\n\nUser ID: ${user.user_id}\nLogin di: tugasly.my.id/login-user\n\nSimpan ID ini baik-baik.`;
+                                window.open(
+                                  `https://wa.me/62${user.wa.replace(/^0/, "")}?text=${encodeURIComponent(pesan)}`,
+                                  "_blank",
+                                );
+                                markWaSent.mutateAsync({
+                                  type: "user",
+                                  id: user.user_id,
+                                });
+                                refetchUsers();
+                              }}
+                            >
+                              Kirim WA
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "affiliates" && (
+        <div className="space-y-4">
+          {approvedAffiliate && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+                <h3 className="font-semibold text-slate-800 text-lg">
+                  Affiliate Disetujui!
+                </h3>
+                <p className="text-sm text-slate-500">
+                  Kirim informasi berikut ke WhatsApp affiliate.
+                </p>
+                <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Nama</span>
+                    <span className="font-medium">
+                      {approvedAffiliate.nama}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Affiliate ID</span>
+                    <span className="font-mono font-bold text-primary">
+                      {approvedAffiliate.affiliate_id}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Kode Referral</span>
+                    <span className="font-mono font-bold text-green-600">
+                      {approvedAffiliate.kode_referral}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">WA</span>
+                    <span className="font-medium">{approvedAffiliate.wa}</span>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setApprovedAffiliate(null)}
+                  >
+                    Nanti
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={() => {
+                      const pesan = `Halo ${approvedAffiliate.nama},\nAkun Affiliate Tugasly Anda sudah aktif.\n\nAffiliate ID: ${approvedAffiliate.affiliate_id}\n-> Digunakan untuk login ke dashboard affiliate di tugasly.my.id/login-affiliate\n\nKode Referral: ${approvedAffiliate.kode_referral}\n-> Bagikan kode ini ke calon customer agar Anda mendapat komisi\n\nSimpan keduanya baik-baik, jangan sampai tertukar.`;
+                      window.open(
+                        `https://wa.me/62${approvedAffiliate.wa.replace(/^0/, "")}?text=${encodeURIComponent(pesan)}`,
+                        "_blank",
+                      );
+                      markWaSent.mutateAsync({
+                        type: "affiliate",
+                        id: approvedAffiliate.affiliate_id,
+                      });
+                      setApprovedAffiliate(null);
+                      refetchAffiliates();
+                    }}
+                  >
+                    Kirim via WA
+                  </Button>
+                </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </div>
+          )}
+          <h2 className="text-xl font-bold text-slate-900">
+            Daftar Affiliates
+          </h2>
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Affiliate ID
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Nama
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    WA
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Kode Referral
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Saldo Komisi
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Status
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    WA Sent
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Tanggal
+                  </th>
+                  <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {allAffiliates.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="text-center py-8 text-slate-400"
+                    >
+                      Belum ada affiliate terdaftar
+                    </td>
+                  </tr>
+                ) : (
+                  allAffiliates.map((aff) => (
+                    <tr key={aff.affiliate_id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                        {aff.affiliate_id}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-800">
+                        {aff.nama}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{aff.wa}</td>
+                      <td className="px-4 py-3 font-mono text-primary">
+                        {aff.kode_referral}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {formatRupiah(aff.saldo_komisi)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          variant="outline"
+                          className={
+                            aff.status === "active"
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                          }
+                        >
+                          {aff.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          variant="outline"
+                          className={
+                            aff.wa_sent
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-slate-50 text-slate-500 border-slate-200"
+                          }
+                        >
+                          {aff.wa_sent ? "Terkirim" : "Belum"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        {new Date(aff.created_at).toLocaleDateString("id-ID")}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          {aff.status === "pending" && (
+                            <Button
+                              size="sm"
+                              disabled={approveAffiliate.isPending}
+                              onClick={async () => {
+                                await approveAffiliate.mutateAsync(
+                                  aff.affiliate_id,
+                                );
+                                await refetchAffiliates();
+                                setApprovedAffiliate(aff);
+                              }}
+                            >
+                              Approve
+                            </Button>
+                          )}
+                          {aff.status === "active" && !aff.wa_sent && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const pesan = `Halo ${aff.nama},\nAkun Affiliate Tugasly Anda sudah aktif.\n\nAffiliate ID: ${aff.affiliate_id}\n-> Digunakan untuk login ke dashboard affiliate di tugasly.my.id/login-affiliate\n\nKode Referral: ${aff.kode_referral}\n-> Bagikan kode ini ke calon customer agar Anda mendapat komisi\n\nSimpan keduanya baik-baik, jangan sampai tertukar.`;
+                                window.open(
+                                  `https://wa.me/62${aff.wa.replace(/^0/, "")}?text=${encodeURIComponent(pesan)}`,
+                                  "_blank",
+                                );
+                                markWaSent.mutateAsync({
+                                  type: "affiliate",
+                                  id: aff.affiliate_id,
+                                });
+                                refetchAffiliates();
+                              }}
+                            >
+                              Kirim WA
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

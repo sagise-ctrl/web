@@ -436,3 +436,112 @@ export function useRequestWithdrawal() {
     },
   });
 }
+
+// ─── Admin User & Affiliate Hooks ─────────────────────────────
+export interface UserData {
+  user_id: string;
+  nama: string;
+  wa: string;
+  kode_referral: string;
+  status: string;
+  saldo_poin: number;
+  created_at: string;
+  approved_at: string;
+  wa_sent: boolean;
+}
+
+export interface AffiliateData {
+  affiliate_id: string;
+  kode_referral: string;
+  nama: string;
+  wa: string;
+  status: string;
+  saldo_komisi: number;
+  created_at: string;
+  approved_at: string;
+  wa_sent: boolean;
+}
+
+export function useGetAllUsers() {
+  return useQuery({
+    queryKey: ["allUsers"],
+    queryFn: async () => {
+      const res = await fetch(`${ADMIN_API_URL}?action=getAllUsers`);
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "Gagal ambil data users");
+      return json.data as UserData[];
+    },
+    refetchInterval: 30000,
+  });
+}
+
+export function useGetAllAffiliates() {
+  return useQuery({
+    queryKey: ["allAffiliates"],
+    queryFn: async () => {
+      const res = await fetch(`${ADMIN_API_URL}?action=getAllAffiliates`);
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "Gagal ambil data affiliates");
+      return json.data as AffiliateData[];
+    },
+    refetchInterval: 30000,
+  });
+}
+
+export function useMarkWaSent() {
+  return useMutation({
+    mutationFn: async ({
+      type,
+      id,
+    }: {
+      type: "user" | "affiliate";
+      id: string;
+    }) => {
+      const res = await fetch(ADMIN_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        credentials: "include",
+        body: JSON.stringify({ action: "markWaSent", type, id }),
+      });
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "Gagal update status WA");
+      return json;
+    },
+  });
+}
+
+export function useApproveUser() {
+  return useMutation({
+    mutationFn: async (user_id: string) => {
+      const res = await fetch(ADMIN_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        credentials: "include",
+        body: JSON.stringify({ action: "approveUser", user_id }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal approve user");
+      return json;
+    },
+  });
+}
+
+export function useApproveAffiliate() {
+  return useMutation({
+    mutationFn: async (affiliate_id: string) => {
+      const res = await fetch(ADMIN_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        credentials: "include",
+        body: JSON.stringify({ action: "approveAffiliate", affiliate_id }),
+      });
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "Gagal approve affiliate");
+      return json;
+    },
+  });
+}
