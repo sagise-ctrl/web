@@ -422,17 +422,80 @@ export default function AffiliatePage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Rekening Pencairan</CardTitle>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowRekeningForm(!showRekeningForm)}
-              >
-                {akun?.rekening_bank ? "Edit Rekening" : "Tambah Rekening"}
-              </Button>
+              {akun?.rekening_status !== "pending" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    // Cek 7 hari jika sudah ada rekening aktif
+                    if (akun?.rekening_bank && akun?.rekening_updated_at) {
+                      const lastEdit = new Date(akun.rekening_updated_at);
+                      const now = new Date();
+                      const diffDays =
+                        (now.getTime() - lastEdit.getTime()) /
+                        (1000 * 60 * 60 * 24);
+                      if (diffDays < 7) {
+                        const nextEdit = new Date(
+                          lastEdit.getTime() + 7 * 24 * 60 * 60 * 1000,
+                        );
+                        toast({
+                          variant: "destructive",
+                          title: "Belum bisa diedit",
+                          description: `Rekening bisa diedit lagi pada ${nextEdit.toLocaleDateString(
+                            "id-ID",
+                            {
+                              day: "2-digit",
+                              month: "long",
+                              year: "numeric",
+                            },
+                          )}`,
+                        });
+                        return;
+                      }
+                    }
+                    setShowRekeningForm(!showRekeningForm);
+                  }}
+                >
+                  {akun?.rekening_bank ? "Edit Rekening" : "Tambah Rekening"}
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
-            {akun?.rekening_bank ? (
+            {akun?.rekening_status === "pending" ? (
+              // Tampilan status pengajuan pending
+              <div className="space-y-3">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className="bg-amber-50 text-amber-700 border-amber-200"
+                    >
+                      Menunggu Verifikasi Admin
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-amber-600">
+                    Rekening Anda sedang dalam proses verifikasi. Tombol edit
+                    akan tersedia setelah diverifikasi.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Bank</span>
+                    <span className="font-medium">{akun.rekening_bank}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Nomor</span>
+                    <span className="font-medium">{akun.nomor_rekening}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Atas Nama</span>
+                    <span className="font-medium">{akun.atas_nama}</span>
+                  </div>
+                </div>
+              </div>
+            ) : akun?.rekening_bank ? (
+              // Tampilan rekening aktif
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Bank</span>
@@ -450,19 +513,14 @@ export default function AffiliatePage() {
                   <span className="text-slate-500">Status</span>
                   <Badge
                     variant="outline"
-                    className={
-                      akun.rekening_status === "active"
-                        ? "bg-green-50 text-green-700 border-green-200"
-                        : "bg-amber-50 text-amber-700 border-amber-200"
-                    }
+                    className="bg-green-50 text-green-700 border-green-200"
                   >
-                    {akun.rekening_status === "active"
-                      ? "Terverifikasi"
-                      : "Menunggu Verifikasi"}
+                    Terverifikasi
                   </Badge>
                 </div>
               </div>
             ) : (
+              // Belum ada rekening
               <p className="text-sm text-slate-400">
                 Belum ada rekening terdaftar.
               </p>
