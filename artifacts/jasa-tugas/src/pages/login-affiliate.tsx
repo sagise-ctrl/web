@@ -36,9 +36,10 @@ export default function LoginAffiliatePage() {
       const json = await res.json();
 
       if (!json.success) {
+        const isInactive = json.message?.includes("non-aktif");
         toast({
           variant: "destructive",
-          title: "Login Gagal",
+          title: isInactive ? "Akun Non-Aktif" : "Login Gagal",
           description: json.message || "Affiliate ID tidak ditemukan",
         });
         return;

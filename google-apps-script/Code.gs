@@ -248,10 +248,16 @@ function doPost(e) {
       return handleUpdatePaymentStatus(body.data);
     if (body.action === "registerUser") return handleRegisterUser(body.data);
     if (body.action === "approveUser") return handleApproveUser(body.user_id);
+    if (body.action === "deactivateUser") return handleDeactivateUser(body.user_id);
+    if (body.action === "activateUser") return handleActivateUser(body.user_id);
     if (body.action === "registerAffiliate")
       return handleRegisterAffiliate(body.data);
     if (body.action === "approveAffiliate")
       return handleApproveAffiliate(body.affiliate_id);
+    if (body.action === "deactivateAffiliate")
+      return handleDeactivateAffiliate(body.affiliate_id);
+    if (body.action === "activateAffiliate")
+      return handleActivateAffiliate(body.affiliate_id);
     if (body.action === "requestWithdrawal")
       return handleRequestWithdrawal(body.data);
     if (body.action === "approveWithdrawal")
@@ -968,7 +974,10 @@ function handleRegisterUser(data) {
     const affRows = affSheet.getDataRange().getValues();
     let validReferral = false;
     for (let i = 1; i < affRows.length; i++) {
-      if (affRows[i][1] === data.kode_referral && affRows[i][4] === "active") {
+      if (
+        affRows[i][1] === data.kode_referral &&
+        affRows[i][AFFILIATE_COLUMNS.STATUS - 1] === "active"
+      ) {
         if (String(affRows[i][3]) === String(data.wa)) {
           return jsonResponse({
             success: false,
@@ -1075,7 +1084,18 @@ function handleGetUserAccount(user_id) {
   const rows = sheet.getDataRange().getValues();
 
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0] === user_id && rows[i][4] === "active") {
+    if (rows[i][0] === user_id) {
+      if (rows[i][USER_COLUMNS.STATUS - 1] === "inactive") {
+        return jsonResponse({
+          success: false,
+          message: "Akun non-aktif, hubungi CS untuk informasi lebih lanjut",
+          code: "INACTIVE",
+        });
+      }
+      if (rows[i][USER_COLUMNS.STATUS - 1] !== "active") {
+        return jsonResponse({ success: false, message: "Akun belum aktif" });
+      }
+
       const uoSheet = getUserOrdersSheet();
       const uoRows = uoSheet.getDataRange().getValues();
       const orders = [];
@@ -1205,7 +1225,18 @@ function handleGetAffiliateAccount(affiliate_id) {
   const rows = sheet.getDataRange().getValues();
 
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0] === affiliate_id && rows[i][4] === "active") {
+    if (rows[i][0] === affiliate_id) {
+      if (rows[i][AFFILIATE_COLUMNS.STATUS - 1] === "inactive") {
+        return jsonResponse({
+          success: false,
+          message: "Akun non-aktif, hubungi CS untuk informasi lebih lanjut",
+          code: "INACTIVE",
+        });
+      }
+      if (rows[i][AFFILIATE_COLUMNS.STATUS - 1] !== "active") {
+        return jsonResponse({ success: false, message: "Akun belum aktif" });
+      }
+
       const commSheet = getAffiliateCommissionsSheet();
       const commRows = commSheet.getDataRange().getValues();
       const commissions = [];
@@ -1258,6 +1289,18 @@ function hitungKomisiAffiliate(orderKe) {
 // ─── Proses Poin & Komisi setelah Order Lunas ────────────────
 function handleOrderLunas(order_id, user_id, harga_order, poin_dipakai) {
   if (!order_id || !user_id) return;
+
+  // Cek status user - kalau inactive, skip poin dan komisi
+  const userSheet0 = getUserSheet();
+  const userRows0 = userSheet0.getDataRange().getValues();
+  let userActive = false;
+  for (let i = 1; i < userRows0.length; i++) {
+    if (userRows0[i][0] === user_id) {
+      userActive = userRows0[i][USER_COLUMNS.STATUS - 1] === "active";
+      break;
+    }
+  }
+  if (!userActive) return; // user inactive, skip semua
 
   const diskon_poin = poin_dipakai * 1000;
   const harga_dibayar = harga_order - diskon_poin;
@@ -1342,6 +1385,70 @@ function handleOrderLunas(order_id, user_id, harga_order, poin_dipakai) {
       break;
     }
   }
+}
+
+// ─── Deactivate/Activate User ─────────────────────────────────
+function handleDeactivateUser(user_id) {
+  if (!user_id)
+    return jsonResponse({ success: false, message: "user_id diperlukan" });
+  const sheet = getUserSheet();
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === user_id) {
+      sheet.getRange(i + 1, USER_COLUMNS.STATUS).setValue("inactive");
+      return jsonResponse({
+        success: true,
+        message: "User berhasil dinonaktifkan",
+      });
+    }
+  }
+  return jsonResponse({ success: false, message: "User tidak ditemukan" });
+}
+
+function handleActivateUser(user_id) {
+  if (!user_id)
+    return jsonResponse({ success: false, message: "user_id diperlukan" });
+  const sheet = getUserSheet();
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === user_id) {
+      sheet.getRange(i + 1, USER_COLUMNS.STATUS).setValue("active");
+      return jsonResponse({ success: true, message: "User berhasil diaktifkan" });
+    }
+  }
+  return jsonResponse({ success: false, message: "User tidak ditemukan" });
+}
+
+// ─── Deactivate/Activate Affiliate ───────────────────────────
+function handleDeactivateAffiliate(affiliate_id) {
+  if (!affiliate_id)
+    return jsonResponse({ success: false, message: "affiliate_id diperlukan" });
+  const sheet = getAffiliateSheet();
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === affiliate_id) {
+      sheet.getRange(i + 1, AFFILIATE_COLUMNS.STATUS).setValue("inactive");
+      return jsonResponse({
+        success: true,
+        message: "Affiliate berhasil dinonaktifkan",
+      });
+    }
+  }
+  return jsonResponse({ success: false, message: "Affiliate tidak ditemukan" });
+}
+
+function handleActivateAffiliate(affiliate_id) {
+  if (!affiliate_id)
+    return jsonResponse({ success: false, message: "affiliate_id diperlukan" });
+  const sheet = getAffiliateSheet();
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === affiliate_id) {
+      sheet.getRange(i + 1, AFFILIATE_COLUMNS.STATUS).setValue("active");
+      return jsonResponse({ success: true, message: "Affiliate berhasil diaktifkan" });
+    }
+  }
+  return jsonResponse({ success: false, message: "Affiliate tidak ditemukan" });
 }
 
 // ─── Request Pencairan ────────────────────────────────────────

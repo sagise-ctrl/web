@@ -25,6 +25,10 @@ import {
   useGetAllAffiliates,
   useApproveUser,
   useApproveAffiliate,
+  useDeactivateUser,
+  useActivateUser,
+  useDeactivateAffiliate,
+  useActivateAffiliate,
   useApproveRekening,
   useApproveWithdrawal,
   useGetAllWithdrawals,
@@ -491,6 +495,10 @@ function AdminDashboard() {
   const { data: allWithdrawals = [], refetch: refetchWithdrawals } =
     useGetAllWithdrawals();
   const approveWithdrawal = useApproveWithdrawal();
+  const deactivateUser = useDeactivateUser();
+  const activateUser = useActivateUser();
+  const deactivateAffiliate = useDeactivateAffiliate();
+  const activateAffiliate = useActivateAffiliate();
   const markWaSent = useMarkWaSent();
 
   const pendingUsersCount = allUsers.filter(
@@ -1289,6 +1297,36 @@ function AdminDashboard() {
                               Kirim WA
                             </Button>
                           )}
+                          {user.status === "active" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-red-300 text-red-600 hover:bg-red-50 text-xs"
+                              disabled={deactivateUser.isPending}
+                              onClick={async () => {
+                                await deactivateUser.mutateAsync(user.user_id);
+                                refetchUsers();
+                                toast({ title: "User dinonaktifkan" });
+                              }}
+                            >
+                              Non-aktifkan
+                            </Button>
+                          )}
+                          {user.status === "inactive" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-green-300 text-green-600 hover:bg-green-50 text-xs"
+                              disabled={activateUser.isPending}
+                              onClick={async () => {
+                                await activateUser.mutateAsync(user.user_id);
+                                refetchUsers();
+                                toast({ title: "User diaktifkan" });
+                              }}
+                            >
+                              Aktifkan
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1540,6 +1578,36 @@ function AdminDashboard() {
                               }}
                             >
                               Kirim WA
+                            </Button>
+                          )}
+                          {aff.status === "active" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-red-300 text-red-600 hover:bg-red-50 text-xs"
+                              disabled={deactivateAffiliate.isPending}
+                              onClick={async () => {
+                                await deactivateAffiliate.mutateAsync(aff.affiliate_id);
+                                refetchAffiliates();
+                                toast({ title: "Affiliate dinonaktifkan" });
+                              }}
+                            >
+                              Non-aktifkan
+                            </Button>
+                          )}
+                          {aff.status === "inactive" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-green-300 text-green-600 hover:bg-green-50 text-xs"
+                              disabled={activateAffiliate.isPending}
+                              onClick={async () => {
+                                await activateAffiliate.mutateAsync(aff.affiliate_id);
+                                refetchAffiliates();
+                                toast({ title: "Affiliate diaktifkan" });
+                              }}
+                            >
+                              Aktifkan
                             </Button>
                           )}
                         </div>

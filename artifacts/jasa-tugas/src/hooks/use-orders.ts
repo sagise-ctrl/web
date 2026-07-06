@@ -585,6 +585,71 @@ export function useApproveAffiliate() {
   });
 }
 
+// ─── Activate/Deactivate Hooks ────────────────────────────────
+export function useDeactivateUser() {
+  return useMutation({
+    mutationFn: async (user_id: string) => {
+      const res = await fetch(ADMIN_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        credentials: "include",
+        body: JSON.stringify({ action: "deactivateUser", user_id }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal nonaktifkan user");
+      return json;
+    },
+  });
+}
+
+export function useActivateUser() {
+  return useMutation({
+    mutationFn: async (user_id: string) => {
+      const res = await fetch(ADMIN_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        credentials: "include",
+        body: JSON.stringify({ action: "activateUser", user_id }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal aktifkan user");
+      return json;
+    },
+  });
+}
+
+export function useDeactivateAffiliate() {
+  return useMutation({
+    mutationFn: async (affiliate_id: string) => {
+      const res = await fetch(ADMIN_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        credentials: "include",
+        body: JSON.stringify({ action: "deactivateAffiliate", affiliate_id }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal nonaktifkan affiliate");
+      return json;
+    },
+  });
+}
+
+export function useActivateAffiliate() {
+  return useMutation({
+    mutationFn: async (affiliate_id: string) => {
+      const res = await fetch(ADMIN_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        credentials: "include",
+        body: JSON.stringify({ action: "activateAffiliate", affiliate_id }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal aktifkan affiliate");
+      return json;
+    },
+  });
+}
+
 // ─── Rekening & Withdrawal Hooks ──────────────────────────────
 export interface WithdrawalHistory {
   withdrawal_id: string;
