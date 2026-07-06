@@ -48,6 +48,7 @@ const COLUMNS = {
   PENYESUAIAN_NOMINAL: 24,
   PENYESUAIAN_KETERANGAN: 25,
   CEK_FILE_AT: 26,
+  USER_ID_REF: 27,
 };
 
 const USER_COLUMNS = {
@@ -122,8 +123,12 @@ function getSheet() {
       "snap_token",
       "payment_dp_id",
       "payment_final_id",
+      "",
+      "",
+      "",
+      "user_id",
     ]);
-    sheet.getRange(1, 1, 1, 23).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 27).setFontWeight("bold");
   }
   return sheet;
 }
@@ -195,6 +200,7 @@ function doGet(e) {
     if (action === "getAllAffiliates") return handleGetAllAffiliates();
     if (action === "getWithdrawalHistory")
       return handleGetWithdrawalHistory(e.parameter.affiliate_id);
+    if (action === "getAllWithdrawals") return handleGetAllWithdrawals();
     if (action === "checkWa") return handleCheckWa(e.parameter.wa);
 
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
@@ -288,11 +294,57 @@ function handleCreateOrder(data) {
   if (!VALID_JENIS.includes(data.jenis)) {
     return jsonResponse({ success: false, message: "Jenis tugas tidak valid" });
   }
+
+  // Kalkulasi harga final dengan diskon
+  var hargaFinal = Number(data.harga) || 0;
+  var dpFinal = Number(data.dp) || Math.ceil(hargaFinal * 0.33);
+  var sisaBayarFinal =
+    Number(data.sisa_bayar) || Math.max(0, hargaFinal - dpFinal);
+
+  // Validasi diskon referral jika ada user_id
+  if (data.user_id && data.pakai_diskon_referral) {
+    var userSheet = getUserSheet();
+    var userRows = userSheet.getDataRange().getValues();
+    var userFound = false;
+    for (var u = 1; u < userRows.length; u++) {
+      if (userRows[u][0] === data.user_id) {
+        userFound = true;
+        var kodeReferral = userRows[u][USER_COLUMNS.KODE_REFERRAL - 1];
+        if (!kodeReferral) {
+          return jsonResponse({
+            success: false,
+            message: "User tidak memiliki kode referral",
+          });
+        }
+        // Cek belum pernah order
+        var uoSheet = getUserOrdersSheet();
+        var uoRows = uoSheet.getDataRange().getValues();
+        var orderCount = 0;
+        for (var uo = 1; uo < uoRows.length; uo++) {
+          if (uoRows[uo][0] === data.user_id) orderCount++;
+        }
+        if (orderCount > 0) {
+          return jsonResponse({
+            success: false,
+            message: "Diskon referral hanya berlaku untuk order pertama",
+          });
+        }
+        break;
+      }
+    }
+    if (!userFound) {
+      return jsonResponse({
+        success: false,
+        message: "User ID tidak ditemukan",
+      });
+    }
+  }
+
   const sheet = getSheet();
   const order_id = generateOrderId();
-  const harga = Number(data.harga) || 0;
-  const dp = Math.ceil(harga * 0.33);
-  const sisa_bayar = harga - dp;
+  const harga = hargaFinal;
+  const dp = dpFinal;
+  const sisa_bayar = sisaBayarFinal;
 
   sheet.appendRow([
     order_id,
@@ -318,6 +370,10 @@ function handleCreateOrder(data) {
     "",
     "",
     "belum_bayar",
+    "",
+    "",
+    "",
+    data.user_id || "",
   ]);
 
   sendAdminNotification(
@@ -681,6 +737,16 @@ function handleUpdatePaymentStatus(data) {
           .getRange(i + 1, COLUMNS.CEK_FILE_AT)
           .setValue(new Date().toISOString());
 
+        var userIdRef = rows[i][COLUMNS.USER_ID_REF - 1] || "";
+        if (userIdRef) {
+          handleOrderLunas(
+            data.order_id,
+            userIdRef,
+            Number(rows[i][COLUMNS.HARGA - 1]),
+            0,
+          );
+        }
+
         var namaCustomerFinal = rows[i][COLUMNS.NAMA - 1] || data.order_id;
         sendAdminNotification(
           "Pelunasan Masuk",
@@ -1027,6 +1093,18 @@ function handleGetUserAccount(user_id) {
         }
       }
 
+      // Hitung jumlah order user dari user_orders sheet
+      const uoSheet2 = getUserOrdersSheet();
+      const uoRows2 = uoSheet2.getDataRange().getValues();
+      let orderCount = 0;
+      for (let j = 1; j < uoRows2.length; j++) {
+        if (uoRows2[j][0] === user_id) orderCount++;
+      }
+
+      // Eligible diskon referral: punya kode referral dan belum pernah order
+      const eligibleReferralDiscount =
+        !!rows[i][USER_COLUMNS.KODE_REFERRAL - 1] && orderCount === 0;
+
       return jsonResponse({
         success: true,
         data: {
@@ -1037,6 +1115,8 @@ function handleGetUserAccount(user_id) {
           saldo_poin: rows[i][5],
           created_at: rows[i][6],
           orders,
+          order_count: orderCount,
+          eligible_referral_discount: eligibleReferralDiscount,
         },
       });
     }
@@ -1152,11 +1232,9 @@ function handleGetAffiliateAccount(affiliate_id) {
           wa: rows[i][3],
           saldo_komisi: rows[i][5],
           rekening_bank: rows[i][AFFILIATE_COLUMNS.REKENING_BANK - 1] || "",
-          nomor_rekening:
-            rows[i][AFFILIATE_COLUMNS.NOMOR_REKENING - 1] || "",
+          nomor_rekening: rows[i][AFFILIATE_COLUMNS.NOMOR_REKENING - 1] || "",
           atas_nama: rows[i][AFFILIATE_COLUMNS.ATAS_NAMA - 1] || "",
-          rekening_status:
-            rows[i][AFFILIATE_COLUMNS.REKENING_STATUS - 1] || "",
+          rekening_status: rows[i][AFFILIATE_COLUMNS.REKENING_STATUS - 1] || "",
           rekening_updated_at:
             rows[i][AFFILIATE_COLUMNS.REKENING_UPDATED_AT - 1] || "",
           commissions,
@@ -1540,7 +1618,9 @@ function handleApproveRekening(affiliate_id) {
           message: "Tidak ada rekening pending untuk diapprove",
         });
       }
-      sheet.getRange(i + 1, AFFILIATE_COLUMNS.REKENING_STATUS).setValue("active");
+      sheet
+        .getRange(i + 1, AFFILIATE_COLUMNS.REKENING_STATUS)
+        .setValue("active");
       return jsonResponse({
         success: true,
         message: "Rekening berhasil diverifikasi",
@@ -1579,4 +1659,42 @@ function handleGetWithdrawalHistory(affiliate_id) {
   }
 
   return jsonResponse({ success: true, data: history });
+}
+
+// ─── Get All Withdrawal Requests (Admin) ──────────────────────
+function handleGetAllWithdrawals() {
+  const wdSheet = getWithdrawalSheet();
+  const wdRows = wdSheet.getDataRange().getValues();
+  const affSheet = getAffiliateSheet();
+  const affRows = affSheet.getDataRange().getValues();
+  const results = [];
+
+  for (let i = 1; i < wdRows.length; i++) {
+    if (!wdRows[i][0]) continue;
+    const affiliateId = wdRows[i][1];
+    let nama = "";
+    let wa = "";
+    for (let j = 1; j < affRows.length; j++) {
+      if (affRows[j][0] === affiliateId) {
+        nama = affRows[j][AFFILIATE_COLUMNS.NAMA - 1];
+        wa = String(affRows[j][AFFILIATE_COLUMNS.WA - 1]).replace(/^'/, "");
+        break;
+      }
+    }
+    results.push({
+      withdrawal_id: wdRows[i][0],
+      affiliate_id: affiliateId,
+      nama,
+      wa,
+      nominal: wdRows[i][2],
+      rekening_bank: wdRows[i][3],
+      nomor_rekening: wdRows[i][4],
+      atas_nama: wdRows[i][5],
+      status: wdRows[i][6],
+      created_at: wdRows[i][7],
+      approved_at: wdRows[i][8] || "",
+    });
+  }
+
+  return jsonResponse({ success: true, data: results });
 }

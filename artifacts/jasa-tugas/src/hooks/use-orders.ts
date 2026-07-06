@@ -258,6 +258,33 @@ export function useSubmitRevisi() {
   });
 }
 
+export interface WithdrawalRequest {
+  withdrawal_id: string;
+  affiliate_id: string;
+  nama: string;
+  wa: string;
+  nominal: number;
+  rekening_bank: string;
+  nomor_rekening: string;
+  atas_nama: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  approved_at: string;
+}
+
+export function useGetAllWithdrawals() {
+  return useQuery({
+    queryKey: ["allWithdrawals"],
+    queryFn: async () => {
+      const res = await fetch(`${ADMIN_API_URL}?action=getAllWithdrawals`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal ambil data pencairan");
+      return json.data as WithdrawalRequest[];
+    },
+    refetchInterval: 30000,
+  });
+}
+
 export function useMarkSelesai() {
   return useMutation({
     mutationFn: async (orderId: string) => {
@@ -316,6 +343,8 @@ export interface UserAccount {
   saldo_poin: number;
   created_at: string;
   orders: UserOrder[];
+  order_count: number;
+  eligible_referral_discount: boolean;
 }
 
 export interface UserOrder {
@@ -599,6 +628,33 @@ export function useApproveRekening() {
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.message || "Gagal approve rekening");
+      return json;
+    },
+  });
+}
+
+export function useApproveWithdrawal() {
+  return useMutation({
+    mutationFn: async ({
+      withdrawal_id,
+      action_type,
+    }: {
+      withdrawal_id: string;
+      action_type: "approve" | "reject";
+    }) => {
+      const res = await fetch(ADMIN_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        credentials: "include",
+        body: JSON.stringify({
+          action: "approveWithdrawal",
+          withdrawal_id,
+          action_type,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "Gagal update pencairan");
       return json;
     },
   });

@@ -26,8 +26,11 @@ import {
   useApproveUser,
   useApproveAffiliate,
   useApproveRekening,
+  useApproveWithdrawal,
+  useGetAllWithdrawals,
   useMarkWaSent,
   type Order,
+  type WithdrawalRequest,
   type OrderStatus,
   type UserData,
   type AffiliateData,
@@ -485,6 +488,9 @@ function AdminDashboard() {
   const approveUser = useApproveUser();
   const approveAffiliate = useApproveAffiliate();
   const approveRekening = useApproveRekening();
+  const { data: allWithdrawals = [], refetch: refetchWithdrawals } =
+    useGetAllWithdrawals();
+  const approveWithdrawal = useApproveWithdrawal();
   const markWaSent = useMarkWaSent();
 
   const pendingUsersCount = allUsers.filter(
@@ -493,6 +499,14 @@ function AdminDashboard() {
   const pendingAffiliatesCount = allAffiliates.filter(
     (a) => a.status === "pending",
   ).length;
+  const pendingRekeningCount = allAffiliates.filter(
+    (a) => a.rekening_status === "pending",
+  ).length;
+  const pendingWithdrawalsCount = allWithdrawals.filter(
+    (w) => w.status === "pending",
+  ).length;
+  const totalAffiliateNotif =
+    pendingAffiliatesCount + pendingRekeningCount + pendingWithdrawalsCount;
 
   async function handleAction(
     orderId: string,
@@ -799,9 +813,9 @@ function AdminDashboard() {
           }`}
         >
           Affiliates
-          {pendingAffiliatesCount > 0 && (
+          {totalAffiliateNotif > 0 && (
             <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-              {pendingAffiliatesCount}
+              {totalAffiliateNotif}
             </span>
           )}
         </button>
@@ -1190,10 +1204,7 @@ function AdminDashboard() {
               <tbody className="divide-y divide-slate-100">
                 {allUsers.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={9}
-                      className="text-center py-8 text-slate-400"
-                    >
+                    <td colSpan={9} className="text-center py-8 text-slate-400">
                       Belum ada user terdaftar
                     </td>
                   </tr>
@@ -1538,6 +1549,132 @@ function AdminDashboard() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Section Withdrawal Requests */}
+          <div className="space-y-3">
+            <h2 className="text-xl font-bold text-slate-900">
+              Request Pencairan
+            </h2>
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                      ID
+                    </th>
+                    <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                      Affiliate
+                    </th>
+                    <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                      Nominal
+                    </th>
+                    <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                      Rekening
+                    </th>
+                    <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                      Status
+                    </th>
+                    <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                      Tanggal
+                    </th>
+                    <th className="text-left px-4 py-3 text-slate-600 font-medium">
+                      Aksi
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {allWithdrawals.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="text-center py-8 text-slate-400"
+                      >
+                        Belum ada request pencairan
+                      </td>
+                    </tr>
+                  ) : (
+                    allWithdrawals.map((wd) => (
+                      <tr key={wd.withdrawal_id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                          {wd.withdrawal_id}
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-slate-800">{wd.nama}</p>
+                          <p className="text-xs text-slate-500">{wd.wa}</p>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-slate-800">
+                          {formatRupiah(wd.nominal)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          <p>
+                            {wd.rekening_bank} - {wd.nomor_rekening}
+                          </p>
+                          <p className="text-slate-400">{wd.atas_nama}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant="outline"
+                            className={
+                              wd.status === "approved"
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : wd.status === "rejected"
+                                  ? "bg-red-50 text-red-700 border-red-200"
+                                  : "bg-amber-50 text-amber-700 border-amber-200"
+                            }
+                          >
+                            {wd.status === "approved"
+                              ? "Disetujui"
+                              : wd.status === "rejected"
+                                ? "Ditolak"
+                                : "Pending"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-500">
+                          {new Date(wd.created_at).toLocaleDateString("id-ID")}
+                        </td>
+                        <td className="px-4 py-3">
+                          {wd.status === "pending" && (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                disabled={approveWithdrawal.isPending}
+                                onClick={async () => {
+                                  await approveWithdrawal.mutateAsync({
+                                    withdrawal_id: wd.withdrawal_id,
+                                    action_type: "approve",
+                                  });
+                                  refetchWithdrawals();
+                                  toast({ title: "Pencairan disetujui" });
+                                }}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-red-300 text-red-600 hover:bg-red-50"
+                                disabled={approveWithdrawal.isPending}
+                                onClick={async () => {
+                                  await approveWithdrawal.mutateAsync({
+                                    withdrawal_id: wd.withdrawal_id,
+                                    action_type: "reject",
+                                  });
+                                  refetchWithdrawals();
+                                  toast({ title: "Pencairan ditolak" });
+                                }}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

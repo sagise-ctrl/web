@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Layout } from "@/components/layout";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -28,6 +28,7 @@ import {
   useCreateOrder,
   useCheckWa,
   useUploadBukti,
+  useGetUserAccount,
   hitungHarga,
   biayaTambahan,
   formatRupiah,
@@ -194,6 +195,19 @@ export default function OrderPage() {
   const [selectedTipe, setSelectedTipe] = useState<TipeOrder>("standar");
   const [selectedJenis, setSelectedJenis] = useState<JenisTugas | "">("");
   const [selectedHalaman, setSelectedHalaman] = useState<number>(10);
+  const [loggedUserId, setLoggedUserId] = useState<string | null>(null);
+  const [pakaiPoin, setPakaiPoin] = useState(false);
+  const [pakaiDiskonReferral, setPakaiDiskonReferral] = useState(false);
+
+  useEffect(() => {
+    const storedId = localStorage.getItem("tugasly_user_id");
+    if (storedId) {
+      setLoggedUserId(storedId);
+      setStep(2); // skip step 1
+    }
+  }, []);
+
+  const { data: userAkun } = useGetUserAccount(loggedUserId || "");
 
   // ─── File pendukung state ────────────────────────────────────
   const [fileTugasFile, setFileTugasFile] = useState<File | null>(null);
@@ -302,6 +316,21 @@ export default function OrderPage() {
       hitungHarga(step2Data.jenis, step2Data.halaman) +
       biayaTambahan(step2Data.tipe_order);
     const dp = Math.ceil(hargaFinal * 0.33);
+
+    // Kalkulasi potongan
+    const saldoPoin = userAkun?.saldo_poin ?? 0;
+    const diskonReferral = pakaiDiskonReferral ? 10000 : 0;
+    const hSetelahReferral = hargaFinal - diskonReferral;
+    const maxDiskonPoin = pakaiPoin
+      ? Math.min(saldoPoin * 1000, hSetelahReferral)
+      : 0;
+    const hFinal = Math.max(0, hSetelahReferral - maxDiskonPoin);
+    const poinDipakai = pakaiPoin ? Math.floor(maxDiskonPoin / 1000) : 0;
+    const dpFinal = Math.ceil(hFinal * 0.33);
+    const sisaFinal = Math.max(0, hFinal - dpFinal);
+
+    // Validasi diskon referral tidak bikin minus
+    const referralValid = hargaFinal - 10000 >= 0;
     try {
       // 1. Buat order dulu
       const payload = {
@@ -311,9 +340,12 @@ export default function OrderPage() {
         halaman: step2Data.halaman,
         note: step2Data.note || "",
         tipe_order: step2Data.tipe_order,
-        harga: hargaFinal,
-        dp,
-        sisa_bayar: Math.max(0, hargaFinal - dp),
+        harga: hFinal,
+        dp: dpFinal,
+        sisa_bayar: sisaFinal,
+        user_id: loggedUserId || undefined,
+        poin_dipakai: poinDipakai,
+        pakai_diskon_referral: pakaiDiskonReferral,
       } as any;
 
       // GANTI bagian setelah mutateAsync berhasil:
@@ -479,6 +511,21 @@ export default function OrderPage() {
     const hTambahan = biayaTambahan(tipe);
     const hTotal = hDasar + hTambahan;
     const dp = Math.ceil(hTotal * 0.33);
+
+    // Kalkulasi potongan
+    const saldoPoin = userAkun?.saldo_poin ?? 0;
+    const diskonReferral = pakaiDiskonReferral ? 10000 : 0;
+    const hSetelahReferral = hTotal - diskonReferral;
+    const maxDiskonPoin = pakaiPoin
+      ? Math.min(saldoPoin * 1000, hSetelahReferral)
+      : 0;
+    const hFinal = Math.max(0, hSetelahReferral - maxDiskonPoin);
+    const poinDipakai = pakaiPoin ? Math.floor(maxDiskonPoin / 1000) : 0;
+    const dpFinal = Math.ceil(hFinal * 0.33);
+    const sisaFinal = Math.max(0, hFinal - dpFinal);
+
+    // Validasi diskon referral tidak bikin minus
+    const referralValid = hTotal - 10000 >= 0;
     const isUploading = uploadBukti.isPending;
 
     return (
@@ -550,14 +597,67 @@ export default function OrderPage() {
                   <span>Total</span>
                   <span className="text-primary">{formatRupiah(hTotal)}</span>
                 </div>
-                <div className="flex justify-between text-sm text-slate-500 pt-1">
-                  <span>DP (dibayar setelah verifikasi admin)</span>
-                  <span>{formatRupiah(dp)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-slate-500">
-                  <span>Sisa bayar setelah tugas selesai</span>
-                  <span>{formatRupiah(Math.max(0, hTotal - dp))}</span>
-                </div>
+
+                {/* Diskon Referral Toggle */}
+                {loggedUserId && userAkun?.eligible_referral_discount && (
+                  <div className={`flex items-center justify-between pt-2 border-t border-slate-200 ${!referralValid ? "opacity-50" : ""}`}>
+                    <div>
+                      <p className="text-sm text-green-700 font-medium">Diskon Referral</p>
+                      <p className="text-xs text-slate-400">-Rp 10.000 (1x untuk order pertama)</p>
+                      {!referralValid && <p className="text-xs text-red-500">Harga terlalu kecil untuk diskon ini</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {pakaiDiskonReferral && <span className="text-sm text-green-600 font-medium">-{formatRupiah(10000)}</span>}
+                      <button
+                        type="button"
+                        disabled={!referralValid}
+                        onClick={() => setPakaiDiskonReferral(!pakaiDiskonReferral)}
+                        className={`w-11 h-6 rounded-full transition-colors ${pakaiDiskonReferral && referralValid ? "bg-green-500" : "bg-slate-200"}`}
+                      >
+                        <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${pakaiDiskonReferral && referralValid ? "translate-x-5" : "translate-x-0"}`} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Toggle Poin */}
+                {loggedUserId && saldoPoin > 0 && (
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                    <div>
+                      <p className="text-sm text-primary font-medium">Pakai Poin</p>
+                      <p className="text-xs text-slate-400">Saldo: {saldoPoin} poin = {formatRupiah(saldoPoin * 1000)}</p>
+                      {pakaiPoin && <p className="text-xs text-primary">Dipakai: {poinDipakai} poin = -{formatRupiah(maxDiskonPoin)}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {pakaiPoin && <span className="text-sm text-primary font-medium">-{formatRupiah(maxDiskonPoin)}</span>}
+                      <button
+                        type="button"
+                        onClick={() => setPakaiPoin(!pakaiPoin)}
+                        className={`w-11 h-6 rounded-full transition-colors ${pakaiPoin ? "bg-primary" : "bg-slate-200"}`}
+                      >
+                        <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${pakaiPoin ? "translate-x-5" : "translate-x-0"}`} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Harga Final */}
+                {(pakaiPoin || pakaiDiskonReferral) && (
+                  <>
+                    <div className="flex justify-between font-bold text-base pt-2 border-t border-slate-200 text-green-700">
+                      <span>Total Setelah Diskon</span>
+                      <span>{formatRupiah(hFinal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-slate-500 pt-1">
+                      <span>DP (33%)</span>
+                      <span>{formatRupiah(dpFinal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-slate-500">
+                      <span>Sisa bayar</span>
+                      <span>{formatRupiah(sisaFinal)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="pt-2 border-t border-slate-200">
@@ -867,6 +967,17 @@ export default function OrderPage() {
       <div className="max-w-2xl mx-auto py-8">
         <StepIndicator current={1} />
         <Card>
+          {!loggedUserId && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex items-start gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-blue-800">Punya akun Tugasly?</p>
+                <p className="text-xs text-blue-600 mt-0.5">Login dengan User ID untuk kumpulkan poin dan dapatkan diskon referral.</p>
+              </div>
+              <Button size="sm" variant="outline" className="border-blue-400 text-blue-700 hover:bg-blue-100 flex-shrink-0" onClick={() => window.location.href = "/login-user"}>
+                Login
+              </Button>
+            </div>
+          )}
           <CardHeader>
             <CardTitle>Data Diri</CardTitle>
             <CardDescription>

@@ -63,6 +63,7 @@ export default function AffiliatePage() {
     isLoading,
     isError,
     error,
+    refetch: refetchAkun,
   } = useGetAffiliateAccount(affiliateId || "");
 
   function handleLogout() {
@@ -607,6 +608,7 @@ export default function AffiliatePage() {
                           nomor_rekening: "",
                           atas_nama: "",
                         });
+                        refetchAkun();
                       } catch (err: any) {
                         toast({
                           variant: "destructive",
