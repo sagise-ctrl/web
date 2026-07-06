@@ -1027,6 +1027,18 @@ export default function OrderPage() {
     );
   }
 
+  // ─── Loading state ketika login dan fetch user account ────────
+  if (loggedUserId && isUserAkunFetching && !userAkun) {
+    console.debug("[Order] rendering login loading state");
+    return (
+      <Layout>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
+
   // ─── Step 1: Data Diri ────────────────────────────────────────
   return (
     <Layout>
