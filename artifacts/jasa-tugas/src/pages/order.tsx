@@ -202,22 +202,44 @@ export default function OrderPage() {
   useEffect(() => {
     const storedId = localStorage.getItem("tugasly_user_id");
     if (storedId) {
+      console.debug("[Order] found stored loggedUserId", storedId);
       setLoggedUserId(storedId);
-      setStep(2); // skip step 1
+    } else {
+      console.debug("[Order] no stored loggedUserId");
     }
   }, []);
 
-  // Isi step1Data dari userAkun jika user sudah login
+  const {
+    data: userAkun,
+    error: userAkunError,
+    isFetching: isUserAkunFetching,
+  } = useGetUserAccount(loggedUserId || "");
+
   useEffect(() => {
     if (loggedUserId && userAkun) {
+      console.debug("[Order] userAkun loaded, skipping step 1", {
+        loggedUserId,
+        userAkun,
+      });
       setStep1Data({
         nama: userAkun.nama,
         wa: userAkun.wa,
       });
+      setStep(2);
+      return;
     }
-  }, [loggedUserId, userAkun]);
 
-  const { data: userAkun } = useGetUserAccount(loggedUserId || "");
+    if (loggedUserId && !userAkun && isUserAkunFetching) {
+      console.debug("[Order] waiting for userAkun fetch", { loggedUserId });
+    }
+
+    if (loggedUserId && userAkunError) {
+      console.error("[Order] failed to load userAkun", {
+        loggedUserId,
+        error: userAkunError,
+      });
+    }
+  }, [loggedUserId, userAkun, userAkunError, isUserAkunFetching]);
 
   // ─── File pendukung state ────────────────────────────────────
   const [fileTugasFile, setFileTugasFile] = useState<File | null>(null);
@@ -610,21 +632,39 @@ export default function OrderPage() {
 
                 {/* Diskon Referral Toggle */}
                 {loggedUserId && userAkun?.eligible_referral_discount && (
-                  <div className={`flex items-center justify-between pt-2 border-t border-slate-200 ${!referralValid ? "opacity-50" : ""}`}>
+                  <div
+                    className={`flex items-center justify-between pt-2 border-t border-slate-200 ${!referralValid ? "opacity-50" : ""}`}
+                  >
                     <div>
-                      <p className="text-sm text-green-700 font-medium">Diskon Referral</p>
-                      <p className="text-xs text-slate-400">-Rp 10.000 (1x untuk order pertama)</p>
-                      {!referralValid && <p className="text-xs text-red-500">Harga terlalu kecil untuk diskon ini</p>}
+                      <p className="text-sm text-green-700 font-medium">
+                        Diskon Referral
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        -Rp 10.000 (1x untuk order pertama)
+                      </p>
+                      {!referralValid && (
+                        <p className="text-xs text-red-500">
+                          Harga terlalu kecil untuk diskon ini
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {pakaiDiskonReferral && <span className="text-sm text-green-600 font-medium">-{formatRupiah(10000)}</span>}
+                      {pakaiDiskonReferral && (
+                        <span className="text-sm text-green-600 font-medium">
+                          -{formatRupiah(10000)}
+                        </span>
+                      )}
                       <button
                         type="button"
                         disabled={!referralValid}
-                        onClick={() => setPakaiDiskonReferral(!pakaiDiskonReferral)}
+                        onClick={() =>
+                          setPakaiDiskonReferral(!pakaiDiskonReferral)
+                        }
                         className={`w-11 h-6 rounded-full transition-colors ${pakaiDiskonReferral && referralValid ? "bg-green-500" : "bg-slate-200"}`}
                       >
-                        <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${pakaiDiskonReferral && referralValid ? "translate-x-5" : "translate-x-0"}`} />
+                        <span
+                          className={`block w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${pakaiDiskonReferral && referralValid ? "translate-x-5" : "translate-x-0"}`}
+                        />
                       </button>
                     </div>
                   </div>
@@ -634,18 +674,34 @@ export default function OrderPage() {
                 {loggedUserId && saldoPoin > 0 && (
                   <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                     <div>
-                      <p className="text-sm text-primary font-medium">Pakai Poin</p>
-                      <p className="text-xs text-slate-400">Saldo: {saldoPoin} poin = {formatRupiah(saldoPoin * 1000)}</p>
-                      {pakaiPoin && <p className="text-xs text-primary">Dipakai: {poinDipakai} poin = -{formatRupiah(maxDiskonPoin)}</p>}
+                      <p className="text-sm text-primary font-medium">
+                        Pakai Poin
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Saldo: {saldoPoin} poin ={" "}
+                        {formatRupiah(saldoPoin * 1000)}
+                      </p>
+                      {pakaiPoin && (
+                        <p className="text-xs text-primary">
+                          Dipakai: {poinDipakai} poin = -
+                          {formatRupiah(maxDiskonPoin)}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {pakaiPoin && <span className="text-sm text-primary font-medium">-{formatRupiah(maxDiskonPoin)}</span>}
+                      {pakaiPoin && (
+                        <span className="text-sm text-primary font-medium">
+                          -{formatRupiah(maxDiskonPoin)}
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={() => setPakaiPoin(!pakaiPoin)}
                         className={`w-11 h-6 rounded-full transition-colors ${pakaiPoin ? "bg-primary" : "bg-slate-200"}`}
                       >
-                        <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${pakaiPoin ? "translate-x-5" : "translate-x-0"}`} />
+                        <span
+                          className={`block w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${pakaiPoin ? "translate-x-5" : "translate-x-0"}`}
+                        />
                       </button>
                     </div>
                   </div>
@@ -980,10 +1036,20 @@ export default function OrderPage() {
           {!loggedUserId && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex items-start gap-3">
               <div className="flex-1">
-                <p className="text-sm font-semibold text-blue-800">Punya akun Tugasly?</p>
-                <p className="text-xs text-blue-600 mt-0.5">Login dengan User ID untuk kumpulkan poin dan dapatkan diskon referral.</p>
+                <p className="text-sm font-semibold text-blue-800">
+                  Punya akun Tugasly?
+                </p>
+                <p className="text-xs text-blue-600 mt-0.5">
+                  Login dengan User ID untuk kumpulkan poin dan dapatkan diskon
+                  referral.
+                </p>
               </div>
-              <Button size="sm" variant="outline" className="border-blue-400 text-blue-700 hover:bg-blue-100 flex-shrink-0" onClick={() => window.location.href = "/login-user"}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-blue-400 text-blue-700 hover:bg-blue-100 flex-shrink-0"
+                onClick={() => (window.location.href = "/login-user")}
+              >
                 Login
               </Button>
             </div>
