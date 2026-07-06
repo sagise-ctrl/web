@@ -207,6 +207,16 @@ export default function OrderPage() {
     }
   }, []);
 
+  // Isi step1Data dari userAkun jika user sudah login
+  useEffect(() => {
+    if (loggedUserId && userAkun) {
+      setStep1Data({
+        nama: userAkun.nama,
+        wa: userAkun.wa,
+      });
+    }
+  }, [loggedUserId, userAkun]);
+
   const { data: userAkun } = useGetUserAccount(loggedUserId || "");
 
   // ─── File pendukung state ────────────────────────────────────
