@@ -14,16 +14,19 @@ export default function Home() {
   return (
     <Layout>
       <div className="flex flex-col gap-16 py-8">
-        
         {/* Hero Section */}
         <section className="flex flex-col md:flex-row items-center gap-10 max-w-5xl mx-auto">
           <div className="flex-1 space-y-6 text-center md:text-left">
             <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight">
               Fokus belajar aja, <br className="hidden sm:inline" />
-              <span className="text-primary">tugasnya biar kami yang handle</span>
+              <span className="text-primary">
+                tugasnya biar kami yang handle.
+              </span>
             </h1>
             <p className="text-lg text-slate-600 leading-relaxed">
-              Bantuan tugas buat mahasiswa yang pengen tetap santai tapi deadline aman. Makalah, PPT, sampai artikel ilmiah, kita kerjain rapi dan tepat waktu.
+              Bantuan tugas buat mahasiswa yang pengen tetap santai tapi
+              deadline aman. Makalah, PPT, sampai artikel ilmiah, kita kerjain
+              rapi dan tepat waktu.
             </p>
             <div className="flex items-center justify-center md:justify-start gap-4 pt-4">
               <Link
@@ -81,7 +84,8 @@ export default function Home() {
             </div>
             <h3 className="text-xl font-bold text-slate-900">Artikel Ilmiah</h3>
             <p className="text-slate-600 text-sm">
-              Artikel ilmiah yang serius tapi tetap enak dibaca, bukan asal jadi.
+              Artikel ilmiah yang serius tapi tetap enak dibaca, bukan asal
+              jadi.
             </p>
           </div>
         </section>
@@ -110,12 +114,12 @@ export default function Home() {
               <CheckCircle2 className="w-10 h-10 text-primary" />
               <h4 className="font-semibold text-lg">Kualitas Terbaik</h4>
               <p className="text-slate-400 text-sm">
-                Dikerjakan oleh tim yang paham bidangnya dengan standar akademik yang rapi.
+                Dikerjakan oleh tim yang paham bidangnya dengan standar akademik
+                yang rapi.
               </p>
             </div>
           </div>
         </section>
-
       </div>
     </Layout>
   );
