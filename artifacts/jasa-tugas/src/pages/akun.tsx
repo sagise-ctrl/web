@@ -12,7 +12,7 @@ import {
   Loader2,
   AlertCircle,
 } from "lucide-react";
-import { useGetUserAccount, formatRupiah } from "@/hooks/use-orders";
+import { useGetUserAccount, useGetUserOrders, type UserOrderItem, formatRupiah } from "@/hooks/use-orders";
 
 export default function AkunPage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -32,6 +32,8 @@ export default function AkunPage() {
     isError,
     error,
   } = useGetUserAccount(userId || "");
+
+  const { data: userOrders = [] } = useGetUserOrders(userId || "");
 
   function handleLogout() {
     localStorage.removeItem("tugasly_user_id");
@@ -149,46 +151,61 @@ export default function AkunPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {!akun?.orders || akun.orders.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">
-                Belum ada order.
-              </p>
+            {userOrders.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">Belum ada order.</p>
             ) : (
               <div className="space-y-3">
-                {akun.orders.map((order) => (
+                {userOrders.map((order) => (
                   <div
                     key={order.order_id}
-                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100"
+                    className="p-3 bg-slate-50 rounded-lg border border-slate-100 space-y-2"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">
-                        {order.order_id}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {new Date(order.created_at).toLocaleDateString(
-                          "id-ID",
-                          {
-                            day: "2-digit",
-                            month: "long",
-                            year: "numeric",
-                          },
-                        )}
-                      </p>
-                      {order.poin_didapat > 0 && (
-                        <p className="text-xs text-primary mt-0.5">
-                          +{order.poin_didapat} poin didapat
-                        </p>
-                      )}
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-mono text-slate-500">{order.order_id}</p>
+                      <Badge
+                        variant="outline"
+                        className={
+                          order.status === "selesai"
+                            ? "bg-green-50 text-green-700 border-green-200 text-xs"
+                            : order.status === "proses pengerjaan"
+                            ? "bg-blue-50 text-blue-700 border-blue-200 text-xs"
+                            : order.status === "menunggu pembayaran dp"
+                            ? "bg-amber-50 text-amber-700 border-amber-200 text-xs"
+                            : order.status === "menunggu pelunasan"
+                            ? "bg-cyan-50 text-cyan-700 border-cyan-200 text-xs"
+                            : order.status === "cek file"
+                            ? "bg-indigo-50 text-indigo-700 border-indigo-200 text-xs"
+                            : order.status === "revisi"
+                            ? "bg-yellow-50 text-yellow-700 border-yellow-200 text-xs"
+                            : "bg-slate-50 text-slate-600 border-slate-200 text-xs"
+                        }
+                      >
+                        {order.status}
+                      </Badge>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-slate-800">
-                        {formatRupiah(order.harga_dibayar)}
-                      </p>
-                      {order.diskon_poin > 0 && (
-                        <p className="text-xs text-green-600">
-                          -{formatRupiah(order.diskon_poin)} poin
+                    <div className="flex items-center justify-between text-sm">
+                      <div>
+                        <p className="font-medium text-slate-800">{order.jenis}</p>
+                        <p className="text-xs text-slate-500">
+                          {order.halaman} {order.jenis === "PPT" ? "slide" : order.jenis === "Tugas Harian" ? "lembar" : "halaman"} · {order.tipe_order}
                         </p>
-                      )}
+                      </div>
+                      <p className="font-bold text-slate-800">{formatRupiah(order.harga)}</p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-slate-400">
+                        {new Date(order.created_at).toLocaleDateString("id-ID", {
+                          day: "2-digit", month: "long", year: "numeric"
+                        })}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7"
+                        onClick={() => window.location.href = `/track?id=${order.order_id}`}
+                      >
+                        Lacak Order
+                      </Button>
                     </div>
                   </div>
                 ))}

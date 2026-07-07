@@ -49,6 +49,7 @@ const COLUMNS = {
   PENYESUAIAN_KETERANGAN: 25,
   CEK_FILE_AT: 26,
   USER_ID_REF: 27,
+  POIN_DIPAKAI: 28,
 };
 
 const USER_COLUMNS = {
@@ -202,6 +203,7 @@ function doGet(e) {
       return handleGetWithdrawalHistory(e.parameter.affiliate_id);
     if (action === "getAllWithdrawals") return handleGetAllWithdrawals();
     if (action === "checkWa") return handleCheckWa(e.parameter.wa);
+    if (action === "getUserOrders") return handleGetUserOrders(e.parameter.user_id);
 
     return jsonResponse({ success: false, message: "Action tidak dikenal" });
   } catch (err) {
@@ -380,6 +382,7 @@ function handleCreateOrder(data) {
     "",
     "",
     data.user_id || "",
+    data.poin_dipakai || 0,
   ]);
 
   sendAdminNotification(
@@ -745,12 +748,8 @@ function handleUpdatePaymentStatus(data) {
 
         var userIdRef = rows[i][COLUMNS.USER_ID_REF - 1] || "";
         if (userIdRef) {
-          handleOrderLunas(
-            data.order_id,
-            userIdRef,
-            Number(rows[i][COLUMNS.HARGA - 1]),
-            0,
-          );
+          var poinDipakai = Number(rows[i][COLUMNS.POIN_DIPAKAI - 1]) || 0;
+          handleOrderLunas(data.order_id, userIdRef, Number(rows[i][COLUMNS.HARGA - 1]), poinDipakai);
         }
 
         var namaCustomerFinal = rows[i][COLUMNS.NAMA - 1] || data.order_id;
@@ -1804,4 +1803,34 @@ function handleGetAllWithdrawals() {
   }
 
   return jsonResponse({ success: true, data: results });
+}
+
+// ─── Get User Orders by USER_ID_REF ──────────────────────────
+function handleGetUserOrders(user_id) {
+  if (!user_id)
+    return jsonResponse({ success: false, message: "user_id diperlukan" });
+
+  const sheet = getSheet();
+  const rows = sheet.getDataRange().getValues();
+  const orders = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    if (!rows[i][0]) continue;
+    if (rows[i][COLUMNS.USER_ID_REF - 1] === user_id) {
+      orders.push({
+        order_id: rows[i][COLUMNS.ORDER_ID - 1],
+        jenis: rows[i][COLUMNS.JENIS - 1],
+        halaman: rows[i][COLUMNS.HALAMAN - 1],
+        status: rows[i][COLUMNS.STATUS - 1],
+        harga: rows[i][COLUMNS.HARGA - 1] || 0,
+        tipe_order: rows[i][COLUMNS.TIPE_ORDER - 1] || "standar",
+        created_at: rows[i][COLUMNS.CREATED_AT - 1] || "",
+      });
+    }
+  }
+
+  // Sort by created_at terbaru
+  orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  return jsonResponse({ success: true, data: orders });
 }

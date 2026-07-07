@@ -150,8 +150,8 @@ export default function RegisterUserPage() {
                   }
                 />
                 <p className="text-xs text-slate-400">
-                  Isi jika Anda punya kode referral dari affiliate. Dapatkan
-                  diskon Rp 10.000 di order pertama.
+                  Isi jika Anda punya kode referral dari teman. Dapatkan diskon
+                  Rp 10.000 di order pertama.
                 </p>
               </div>
 

@@ -737,3 +737,31 @@ export function useGetWithdrawalHistory(affiliate_id: string) {
     enabled: !!affiliate_id,
   });
 }
+
+// ─── User Orders Hook ─────────────────────────────────────────
+export interface UserOrderItem {
+  order_id: string;
+  jenis: string;
+  halaman: number;
+  status: string;
+  harga: number;
+  tipe_order: string;
+  created_at: string;
+}
+
+export function useGetUserOrders(user_id: string) {
+  return useQuery({
+    queryKey: ["userOrders", user_id],
+    queryFn: async () => {
+      const res = await fetch(
+        `${API_URL}?action=getUserOrders&user_id=${user_id}`,
+      );
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "Gagal ambil riwayat order");
+      return json.data as UserOrderItem[];
+    },
+    enabled: !!user_id,
+    refetchInterval: 30000,
+  });
+}
