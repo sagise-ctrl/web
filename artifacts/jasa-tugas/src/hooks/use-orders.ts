@@ -278,7 +278,8 @@ export function useGetAllWithdrawals() {
     queryFn: async () => {
       const res = await fetch(`${ADMIN_API_URL}?action=getAllWithdrawals`);
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal ambil data pencairan");
+      if (!json.success)
+        throw new Error(json.message || "Gagal ambil data pencairan");
       return json.data as WithdrawalRequest[];
     },
     refetchInterval: 30000,
@@ -596,7 +597,8 @@ export function useDeactivateUser() {
         body: JSON.stringify({ action: "deactivateUser", user_id }),
       });
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal nonaktifkan user");
+      if (!json.success)
+        throw new Error(json.message || "Gagal nonaktifkan user");
       return json;
     },
   });
@@ -628,7 +630,8 @@ export function useDeactivateAffiliate() {
         body: JSON.stringify({ action: "deactivateAffiliate", affiliate_id }),
       });
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal nonaktifkan affiliate");
+      if (!json.success)
+        throw new Error(json.message || "Gagal nonaktifkan affiliate");
       return json;
     },
   });
@@ -644,7 +647,8 @@ export function useActivateAffiliate() {
         body: JSON.stringify({ action: "activateAffiliate", affiliate_id }),
       });
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal aktifkan affiliate");
+      if (!json.success)
+        throw new Error(json.message || "Gagal aktifkan affiliate");
       return json;
     },
   });
@@ -676,7 +680,8 @@ export function useSaveRekening() {
         body: JSON.stringify({ action: "saveRekening", data }),
       });
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal simpan rekening");
+      if (!json.success)
+        throw new Error(json.message || "Gagal simpan rekening");
       return json;
     },
   });
@@ -692,7 +697,8 @@ export function useApproveRekening() {
         body: JSON.stringify({ action: "approveRekening", affiliate_id }),
       });
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal approve rekening");
+      if (!json.success)
+        throw new Error(json.message || "Gagal approve rekening");
       return json;
     },
   });
@@ -729,9 +735,12 @@ export function useGetWithdrawalHistory(affiliate_id: string) {
   return useQuery({
     queryKey: ["withdrawalHistory", affiliate_id],
     queryFn: async () => {
-      const res = await fetch(`${API_URL}?action=getWithdrawalHistory&affiliate_id=${affiliate_id}`);
+      const res = await fetch(
+        `${API_URL}?action=getWithdrawalHistory&affiliate_id=${affiliate_id}`,
+      );
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal ambil riwayat pencairan");
+      if (!json.success)
+        throw new Error(json.message || "Gagal ambil riwayat pencairan");
       return json.data as WithdrawalHistory[];
     },
     enabled: !!affiliate_id,

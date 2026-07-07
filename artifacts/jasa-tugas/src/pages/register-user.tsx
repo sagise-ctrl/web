@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,13 @@ export default function RegisterUserPage() {
   const [form, setForm] = useState({ nama: "", wa: "", kode_referral: "" });
   const [success, setSuccess] = useState(false);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) {
+      setForm((prev) => ({ ...prev, kode_referral: ref.toUpperCase() }));
+    }
+  }, []);
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 

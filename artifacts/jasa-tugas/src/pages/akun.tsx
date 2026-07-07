@@ -12,7 +12,12 @@ import {
   Loader2,
   AlertCircle,
 } from "lucide-react";
-import { useGetUserAccount, useGetUserOrders, type UserOrderItem, formatRupiah } from "@/hooks/use-orders";
+import {
+  useGetUserAccount,
+  useGetUserOrders,
+  type UserOrderItem,
+  formatRupiah,
+} from "@/hooks/use-orders";
 
 export default function AkunPage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -152,7 +157,9 @@ export default function AkunPage() {
           </CardHeader>
           <CardContent>
             {userOrders.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Belum ada order.</p>
+              <p className="text-sm text-slate-400 text-center py-4">
+                Belum ada order.
+              </p>
             ) : (
               <div className="space-y-3">
                 {userOrders.map((order) => (
@@ -161,23 +168,25 @@ export default function AkunPage() {
                     className="p-3 bg-slate-50 rounded-lg border border-slate-100 space-y-2"
                   >
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-mono text-slate-500">{order.order_id}</p>
+                      <p className="text-xs font-mono text-slate-500">
+                        {order.order_id}
+                      </p>
                       <Badge
                         variant="outline"
                         className={
                           order.status === "selesai"
                             ? "bg-green-50 text-green-700 border-green-200 text-xs"
                             : order.status === "proses pengerjaan"
-                            ? "bg-blue-50 text-blue-700 border-blue-200 text-xs"
-                            : order.status === "menunggu pembayaran dp"
-                            ? "bg-amber-50 text-amber-700 border-amber-200 text-xs"
-                            : order.status === "menunggu pelunasan"
-                            ? "bg-cyan-50 text-cyan-700 border-cyan-200 text-xs"
-                            : order.status === "cek file"
-                            ? "bg-indigo-50 text-indigo-700 border-indigo-200 text-xs"
-                            : order.status === "revisi"
-                            ? "bg-yellow-50 text-yellow-700 border-yellow-200 text-xs"
-                            : "bg-slate-50 text-slate-600 border-slate-200 text-xs"
+                              ? "bg-blue-50 text-blue-700 border-blue-200 text-xs"
+                              : order.status === "menunggu pembayaran dp"
+                                ? "bg-amber-50 text-amber-700 border-amber-200 text-xs"
+                                : order.status === "menunggu pelunasan"
+                                  ? "bg-cyan-50 text-cyan-700 border-cyan-200 text-xs"
+                                  : order.status === "cek file"
+                                    ? "bg-indigo-50 text-indigo-700 border-indigo-200 text-xs"
+                                    : order.status === "revisi"
+                                      ? "bg-yellow-50 text-yellow-700 border-yellow-200 text-xs"
+                                      : "bg-slate-50 text-slate-600 border-slate-200 text-xs"
                         }
                       >
                         {order.status}
@@ -185,24 +194,41 @@ export default function AkunPage() {
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <div>
-                        <p className="font-medium text-slate-800">{order.jenis}</p>
+                        <p className="font-medium text-slate-800">
+                          {order.jenis}
+                        </p>
                         <p className="text-xs text-slate-500">
-                          {order.halaman} {order.jenis === "PPT" ? "slide" : order.jenis === "Tugas Harian" ? "lembar" : "halaman"} · {order.tipe_order}
+                          {order.halaman}{" "}
+                          {order.jenis === "PPT"
+                            ? "slide"
+                            : order.jenis === "Tugas Harian"
+                              ? "lembar"
+                              : "halaman"}{" "}
+                          · {order.tipe_order}
                         </p>
                       </div>
-                      <p className="font-bold text-slate-800">{formatRupiah(order.harga)}</p>
+                      <p className="font-bold text-slate-800">
+                        {formatRupiah(order.harga)}
+                      </p>
                     </div>
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-slate-400">
-                        {new Date(order.created_at).toLocaleDateString("id-ID", {
-                          day: "2-digit", month: "long", year: "numeric"
-                        })}
+                        {new Date(order.created_at).toLocaleDateString(
+                          "id-ID",
+                          {
+                            day: "2-digit",
+                            month: "long",
+                            year: "numeric",
+                          },
+                        )}
                       </p>
                       <Button
                         size="sm"
                         variant="outline"
                         className="text-xs h-7"
-                        onClick={() => window.location.href = `/track?id=${order.order_id}`}
+                        onClick={() =>
+                          (window.location.href = `/track?id=${order.order_id}`)
+                        }
                       >
                         Lacak Order
                       </Button>

@@ -211,6 +211,32 @@ export default function AffiliatePage() {
                 </Button>
               </div>
             </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-500">Link Referral</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-mono truncate max-w-[160px]">
+                  tugasly.my.id/register-user?ref={akun?.kode_referral}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      `https://tugasly.my.id/register-user?ref=${akun?.kode_referral}`,
+                    );
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                >
+                  {copied ? (
+                    <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
