@@ -286,6 +286,62 @@ export function useGetAllWithdrawals() {
   });
 }
 
+// ─── Affiliate Mutations & Withdrawal Requests Hooks ──────────
+export interface AffiliateMutation {
+  type: "komisi" | "pencairan";
+  label: string;
+  detail: string;
+  nominal: number;
+  sign: "plus" | "minus";
+  date: string;
+  ref_id: string;
+  saldo_setelah: number;
+}
+
+export interface AffiliateWithdrawalRequest {
+  withdrawal_id: string;
+  nominal: number;
+  rekening_bank: string;
+  nomor_rekening: string;
+  atas_nama: string;
+  status: "pending" | "rejected";
+  created_at: string;
+  approved_at: string;
+}
+
+export function useGetAffiliateMutations(affiliate_id: string) {
+  return useQuery({
+    queryKey: ["affiliateMutations", affiliate_id],
+    queryFn: async () => {
+      const res = await fetch(
+        `${API_URL}?action=getAffiliateMutations&affiliate_id=${affiliate_id}`,
+      );
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Gagal ambil mutasi");
+      return json.data as AffiliateMutation[];
+    },
+    enabled: !!affiliate_id,
+    refetchInterval: 30000,
+  });
+}
+
+export function useGetAffiliateWithdrawalRequests(affiliate_id: string) {
+  return useQuery({
+    queryKey: ["affiliateWithdrawalRequests", affiliate_id],
+    queryFn: async () => {
+      const res = await fetch(
+        `${API_URL}?action=getAffiliateWithdrawalRequests&affiliate_id=${affiliate_id}`,
+      );
+      const json = await res.json();
+      if (!json.success)
+        throw new Error(json.message || "Gagal ambil request pencairan");
+      return json.data as AffiliateWithdrawalRequest[];
+    },
+    enabled: !!affiliate_id,
+    refetchInterval: 30000,
+  });
+}
+
 export function useMarkSelesai() {
   return useMutation({
     mutationFn: async (orderId: string) => {

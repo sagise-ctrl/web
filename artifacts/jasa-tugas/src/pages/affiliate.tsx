@@ -19,7 +19,11 @@ import {
   useRequestWithdrawal,
   useSaveRekening,
   useGetWithdrawalHistory,
+  useGetAffiliateMutations,
+  useGetAffiliateWithdrawalRequests,
   type WithdrawalHistory,
+  type AffiliateMutation,
+  type AffiliateWithdrawalRequest,
   formatRupiah,
 } from "@/hooks/use-orders";
 import { useToast } from "@/hooks/use-toast";
@@ -47,6 +51,10 @@ export default function AffiliatePage() {
   const saveRekening = useSaveRekening();
   const { data: withdrawalHistory = [], refetch: refetchHistory } =
     useGetWithdrawalHistory(affiliateId || "");
+  const { data: mutations = [] } = useGetAffiliateMutations(affiliateId || "");
+  const { data: withdrawalRequests = [] } = useGetAffiliateWithdrawalRequests(
+    affiliateId || "",
+  );
   const requestWithdrawal = useRequestWithdrawal();
 
   useEffect(() => {
@@ -656,54 +664,64 @@ export default function AffiliatePage() {
           </CardContent>
         </Card>
 
-        {/* Riwayat Pencairan */}
+        {/* Mutasi Saldo */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Riwayat Pencairan</CardTitle>
+            <CardTitle className="text-base">Mutasi Saldo</CardTitle>
           </CardHeader>
           <CardContent>
-            {withdrawalHistory.length === 0 ? (
+            {mutations.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-4">
-                Belum ada riwayat pencairan.
+                Belum ada mutasi.
               </p>
             ) : (
               <div className="space-y-3">
-                {withdrawalHistory.map((wd) => (
+                {mutations.map((mut, idx) => (
                   <div
-                    key={wd.withdrawal_id}
-                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100"
+                    key={idx}
+                    className="flex items-start justify-between p-3 bg-slate-50 rounded-lg border border-slate-100"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">
-                        {formatRupiah(wd.nominal)}
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                          mut.sign === "plus" ? "bg-green-100" : "bg-red-100"
+                        }`}
+                      >
+                        <span
+                          className={`text-sm font-bold ${mut.sign === "plus" ? "text-green-600" : "text-red-600"}`}
+                        >
+                          {mut.sign === "plus" ? "+" : "-"}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">
+                          {mut.label}
+                        </p>
+                        <p className="text-xs text-slate-500">{mut.detail}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {new Date(mut.date).toLocaleDateString("id-ID", {
+                            day: "2-digit",
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          ID: {mut.ref_id}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`text-sm font-bold ${mut.sign === "plus" ? "text-green-600" : "text-red-600"}`}
+                      >
+                        {mut.sign === "plus" ? "+" : "-"}
+                        {formatRupiah(mut.nominal)}
                       </p>
-                      <p className="text-xs text-slate-500">
-                        {wd.rekening_bank} - {wd.nomor_rekening}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {new Date(wd.created_at).toLocaleDateString("id-ID", {
-                          day: "2-digit",
-                          month: "long",
-                          year: "numeric",
-                        })}
+                      <p className="text-xs text-slate-400 mt-1">Saldo:</p>
+                      <p className="text-xs font-medium text-slate-700">
+                        {formatRupiah(mut.saldo_setelah)}
                       </p>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className={
-                        wd.status === "approved"
-                          ? "bg-green-50 text-green-700 border-green-200"
-                          : wd.status === "rejected"
-                            ? "bg-red-50 text-red-700 border-red-200"
-                            : "bg-amber-50 text-amber-700 border-amber-200"
-                      }
-                    >
-                      {wd.status === "approved"
-                        ? "Disetujui"
-                        : wd.status === "rejected"
-                          ? "Ditolak"
-                          : "Pending"}
-                    </Badge>
                   </div>
                 ))}
               </div>
@@ -711,42 +729,78 @@ export default function AffiliatePage() {
           </CardContent>
         </Card>
 
-        {/* Riwayat Komisi */}
+        {/* Request Pencairan */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Riwayat Komisi</CardTitle>
+            <CardTitle className="text-base">Request Pencairan</CardTitle>
           </CardHeader>
           <CardContent>
-            {!akun?.commissions || akun.commissions.length === 0 ? (
+            {withdrawalRequests.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-4">
-                Belum ada komisi.
+                Tidak ada request pencairan.
               </p>
             ) : (
               <div className="space-y-3">
-                {akun.commissions.map((comm, idx) => (
+                {withdrawalRequests.map((req) => (
                   <div
-                    key={idx}
-                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100"
+                    key={req.withdrawal_id}
+                    className="p-3 bg-slate-50 rounded-lg border border-slate-100 space-y-2"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">
-                        {comm.order_id}
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-mono text-slate-500">
+                        {req.withdrawal_id}
                       </p>
-                      <p className="text-xs text-slate-500">
-                        Order ke-{comm.order_ke} dari {comm.user_id} ·{" "}
-                        {comm.persen_komisi}%
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {new Date(comm.created_at).toLocaleDateString("id-ID", {
-                          day: "2-digit",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </p>
+                      <Badge
+                        variant="outline"
+                        className={
+                          req.status === "rejected"
+                            ? "bg-red-50 text-red-700 border-red-200 text-xs"
+                            : "bg-amber-50 text-amber-700 border-amber-200 text-xs"
+                        }
+                      >
+                        {req.status === "rejected"
+                          ? "Ditolak"
+                          : "Menunggu Verifikasi"}
+                      </Badge>
                     </div>
-                    <p className="text-sm font-bold text-green-700">
-                      +{formatRupiah(comm.nominal_komisi)}
-                    </p>
+                    <div className="flex items-center justify-between text-sm">
+                      <div>
+                        <p className="font-bold text-slate-800">
+                          {formatRupiah(req.nominal)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {req.rekening_bank} - {req.nomor_rekening}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {req.atas_nama}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-400">
+                          {new Date(req.created_at).toLocaleDateString(
+                            "id-ID",
+                            {
+                              day: "2-digit",
+                              month: "long",
+                              year: "numeric",
+                            },
+                          )}
+                        </p>
+                        {req.status === "rejected" && req.approved_at && (
+                          <p className="text-xs text-red-400 mt-0.5">
+                            Ditolak:{" "}
+                            {new Date(req.approved_at).toLocaleDateString(
+                              "id-ID",
+                              {
+                                day: "2-digit",
+                                month: "long",
+                                year: "numeric",
+                              },
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

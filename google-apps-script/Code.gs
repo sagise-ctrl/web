@@ -998,26 +998,17 @@ function handleRegisterUser(data) {
         break;
       }
     }
+
     if (!validReferral) {
       return jsonResponse({
         success: false,
-        message: "Kode referral tidak valid atau tidak aktif",
+        message: "Kode referral tidak valid",
       });
-    }
-
-    const refSheet = getReferralUsageSheet();
-    const refRows = refSheet.getDataRange().getValues();
-    for (let i = 1; i < refRows.length; i++) {
-      if (String(refRows[i][3]) === String(data.wa)) {
-        return jsonResponse({
-          success: false,
-          message: "WA ini sudah pernah pakai kode referral",
-        });
-      }
     }
   }
 
   const userId = generateUserId();
+
   sheet.appendRow([
     userId,
     data.nama,
@@ -1032,12 +1023,12 @@ function handleRegisterUser(data) {
 
   return jsonResponse({
     success: true,
-    user_id: userId,
     message: "Registrasi berhasil, tunggu konfirmasi admin via WA",
+    user_id: userId,
   });
 }
 
-// ─── Approve User (Admin) ─────────────────────────────────────
+// ─── Approve User (Admin) ────────────────────────────────────
 function handleApproveUser(user_id) {
   if (!user_id)
     return jsonResponse({ success: false, message: "user_id diperlukan" });
@@ -1047,34 +1038,16 @@ function handleApproveUser(user_id) {
 
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === user_id) {
-      if (rows[i][4] === "active") {
-        return jsonResponse({ success: false, message: "User sudah aktif" });
+      if (rows[i][USER_COLUMNS.STATUS - 1] === "active") {
+        return jsonResponse({
+          success: false,
+          message: "User sudah aktif",
+        });
       }
-
-      sheet.getRange(i + 1, 5).setValue("active");
-      sheet.getRange(i + 1, 8).setValue(new Date().toISOString());
-
-      const kodeReferral = rows[i][3];
-      if (kodeReferral) {
-        const affSheet = getAffiliateSheet();
-        const affRows = affSheet.getDataRange().getValues();
-        let affiliateId = "";
-        for (let j = 1; j < affRows.length; j++) {
-          if (affRows[j][1] === kodeReferral) {
-            affiliateId = affRows[j][0];
-            break;
-          }
-        }
-        const refSheet = getReferralUsageSheet();
-        refSheet.appendRow([
-          kodeReferral,
-          affiliateId,
-          user_id,
-          String(rows[i][2]),
-          new Date().toISOString(),
-        ]);
-      }
-
+      sheet.getRange(i + 1, USER_COLUMNS.STATUS).setValue("active");
+      sheet
+        .getRange(i + 1, USER_COLUMNS.APPROVED_AT)
+        .setValue(new Date().toISOString());
       return jsonResponse({
         success: true,
         message: "User berhasil diaktifkan",
@@ -1106,47 +1079,15 @@ function handleGetUserAccount(user_id) {
         return jsonResponse({ success: false, message: "Akun belum aktif" });
       }
 
-      const uoSheet = getUserOrdersSheet();
-      const uoRows = uoSheet.getDataRange().getValues();
-      const orders = [];
-      for (let j = 1; j < uoRows.length; j++) {
-        if (uoRows[j][0] === user_id) {
-          orders.push({
-            order_id: uoRows[j][1],
-            harga_order: uoRows[j][2],
-            poin_dipakai: uoRows[j][3],
-            diskon_poin: uoRows[j][4],
-            harga_dibayar: uoRows[j][5],
-            poin_didapat: uoRows[j][6],
-            created_at: uoRows[j][7],
-          });
-        }
-      }
-
-      // Hitung jumlah order user dari user_orders sheet
-      const uoSheet2 = getUserOrdersSheet();
-      const uoRows2 = uoSheet2.getDataRange().getValues();
-      let orderCount = 0;
-      for (let j = 1; j < uoRows2.length; j++) {
-        if (uoRows2[j][0] === user_id) orderCount++;
-      }
-
-      // Eligible diskon referral: punya kode referral dan belum pernah order
-      const eligibleReferralDiscount =
-        !!rows[i][USER_COLUMNS.KODE_REFERRAL - 1] && orderCount === 0;
-
       return jsonResponse({
         success: true,
         data: {
           user_id: rows[i][0],
           nama: rows[i][1],
-          wa: rows[i][2],
-          kode_referral: rows[i][3],
-          saldo_poin: rows[i][5],
-          created_at: rows[i][6],
-          orders,
-          order_count: orderCount,
-          eligible_referral_discount: eligibleReferralDiscount,
+          wa: String(rows[i][2]).replace(/^'/, ""),
+          kode_referral: rows[i][3] || "",
+          saldo_poin: Number(rows[i][5]) || 0,
+          created_at: rows[i][6] || "",
         },
       });
     }
@@ -1249,18 +1190,22 @@ function handleGetAffiliateAccount(affiliate_id) {
 
       const commSheet = getAffiliateCommissionsSheet();
       const commRows = commSheet.getDataRange().getValues();
-      const commissions = [];
+      let totalKomisi = 0;
+      let totalPencairan = 0;
+      let orderCount = 0;
+
       for (let j = 1; j < commRows.length; j++) {
         if (commRows[j][0] === affiliate_id) {
-          commissions.push({
-            user_id: commRows[j][1],
-            order_id: commRows[j][2],
-            order_ke: commRows[j][3],
-            harga_order: commRows[j][4],
-            persen_komisi: commRows[j][5],
-            nominal_komisi: commRows[j][6],
-            created_at: commRows[j][7],
-          });
+          totalKomisi += Number(commRows[j][6]) || 0;
+          orderCount++;
+        }
+      }
+
+      const wdSheet = getWithdrawalSheet();
+      const wdRows = wdSheet.getDataRange().getValues();
+      for (let j = 1; j < wdRows.length; j++) {
+        if (wdRows[j][1] === affiliate_id && wdRows[j][6] === "approved") {
+          totalPencairan += Number(wdRows[j][2]) || 0;
         }
       }
 
@@ -1270,15 +1215,19 @@ function handleGetAffiliateAccount(affiliate_id) {
           affiliate_id: rows[i][0],
           kode_referral: rows[i][1],
           nama: rows[i][2],
-          wa: rows[i][3],
-          saldo_komisi: rows[i][5],
-          rekening_bank: rows[i][AFFILIATE_COLUMNS.REKENING_BANK - 1] || "",
-          nomor_rekening: rows[i][AFFILIATE_COLUMNS.NOMOR_REKENING - 1] || "",
-          atas_nama: rows[i][AFFILIATE_COLUMNS.ATAS_NAMA - 1] || "",
-          rekening_status: rows[i][AFFILIATE_COLUMNS.REKENING_STATUS - 1] || "",
-          rekening_updated_at:
-            rows[i][AFFILIATE_COLUMNS.REKENING_UPDATED_AT - 1] || "",
-          commissions,
+          wa: String(rows[i][3]).replace(/^'/, ""),
+          saldo_komisi: Number(rows[i][5]) || 0,
+          total_komisi: totalKomisi,
+          total_pencairan: totalPencairan,
+          order_count: orderCount,
+          created_at: rows[i][6] || "",
+          rekening: {
+            bank: rows[i][9] || "",
+            nomor: rows[i][10] || "",
+            atas_nama: rows[i][11] || "",
+            status: rows[i][12] || "",
+            updated_at: rows[i][13] || "",
+          },
         },
       });
     }
@@ -1292,29 +1241,18 @@ function handleGetAffiliateAccount(affiliate_id) {
 
 // ─── Hitung Komisi ────────────────────────────────────────────
 function hitungKomisiAffiliate(orderKe) {
-  if (orderKe < 1 || orderKe > 10) return 0;
-  return (30 - (orderKe - 1) * 3) / 100;
+  if (orderKe <= 3) return 0.1;
+  if (orderKe <= 5) return 0.05;
+  if (orderKe <= 10) return 0.03;
+  return 0;
 }
 
-// ─── Proses Poin & Komisi setelah Order Lunas ────────────────
+// ─── Handle Order Lunas (komisi affiliate + poin user) ────────
 function handleOrderLunas(order_id, user_id, harga_order, poin_dipakai) {
-  if (!order_id || !user_id) return;
-
-  // Cek status user - kalau inactive, skip poin dan komisi
-  const userSheet0 = getUserSheet();
-  const userRows0 = userSheet0.getDataRange().getValues();
-  let userActive = false;
-  for (let i = 1; i < userRows0.length; i++) {
-    if (userRows0[i][0] === user_id) {
-      userActive = userRows0[i][USER_COLUMNS.STATUS - 1] === "active";
-      break;
-    }
-  }
-  if (!userActive) return; // user inactive, skip semua
-
-  const diskon_poin = poin_dipakai * 1000;
-  const harga_dibayar = harga_order - diskon_poin;
-  const poin_didapat = Math.floor(harga_order / 15000);
+  // Hitung poin
+  var poin_didapat = Math.floor(harga_order / 100) * 5;
+  var diskon_poin = poin_dipakai;
+  var harga_dibayar = harga_order - diskon_poin;
 
   const userSheet = getUserSheet();
   const userRows = userSheet.getDataRange().getValues();
@@ -1579,9 +1517,9 @@ function handleGetAllUsers() {
       nama: rows[i][USER_COLUMNS.NAMA - 1],
       wa: String(rows[i][USER_COLUMNS.WA - 1]).replace(/^'/, ""),
       kode_referral: rows[i][USER_COLUMNS.KODE_REFERRAL - 1] || "",
-      status: rows[i][USER_COLUMNS.STATUS - 1],
-      saldo_poin: rows[i][USER_COLUMNS.SALDO_POIN - 1] || 0,
-      created_at: rows[i][USER_COLUMNS.CREATED_AT - 1],
+      status: rows[i][USER_COLUMNS.STATUS - 1] || "",
+      saldo_poin: Number(rows[i][USER_COLUMNS.SALDO_POIN - 1]) || 0,
+      created_at: rows[i][USER_COLUMNS.CREATED_AT - 1] || "",
       approved_at: rows[i][USER_COLUMNS.APPROVED_AT - 1] || "",
       wa_sent: rows[i][USER_COLUMNS.WA_SENT - 1] || false,
     });
@@ -1598,20 +1536,21 @@ function handleGetAllAffiliates() {
     if (!rows[i][0]) continue;
     affiliates.push({
       affiliate_id: rows[i][AFFILIATE_COLUMNS.AFFILIATE_ID - 1],
-      kode_referral: rows[i][AFFILIATE_COLUMNS.KODE_REFERRAL - 1],
+      kode_referral: rows[i][AFFILIATE_COLUMNS.KODE_REFERRAL - 1] || "",
       nama: rows[i][AFFILIATE_COLUMNS.NAMA - 1],
       wa: String(rows[i][AFFILIATE_COLUMNS.WA - 1]).replace(/^'/, ""),
-      status: rows[i][AFFILIATE_COLUMNS.STATUS - 1],
-      saldo_komisi: rows[i][AFFILIATE_COLUMNS.SALDO_KOMISI - 1] || 0,
-      created_at: rows[i][AFFILIATE_COLUMNS.CREATED_AT - 1],
+      status: rows[i][AFFILIATE_COLUMNS.STATUS - 1] || "",
+      saldo_komisi: Number(rows[i][AFFILIATE_COLUMNS.SALDO_KOMISI - 1]) || 0,
+      created_at: rows[i][AFFILIATE_COLUMNS.CREATED_AT - 1] || "",
       approved_at: rows[i][AFFILIATE_COLUMNS.APPROVED_AT - 1] || "",
       wa_sent: rows[i][AFFILIATE_COLUMNS.WA_SENT - 1] || false,
-      rekening_bank: rows[i][AFFILIATE_COLUMNS.REKENING_BANK - 1] || "",
-      nomor_rekening: rows[i][AFFILIATE_COLUMNS.NOMOR_REKENING - 1] || "",
-      atas_nama: rows[i][AFFILIATE_COLUMNS.ATAS_NAMA - 1] || "",
-      rekening_status: rows[i][AFFILIATE_COLUMNS.REKENING_STATUS - 1] || "",
-      rekening_updated_at:
-        rows[i][AFFILIATE_COLUMNS.REKENING_UPDATED_AT - 1] || "",
+      rekening: {
+        bank: rows[i][AFFILIATE_COLUMNS.REKENING_BANK - 1] || "",
+        nomor: rows[i][AFFILIATE_COLUMNS.NOMOR_REKENING - 1] || "",
+        atas_nama: rows[i][AFFILIATE_COLUMNS.ATAS_NAMA - 1] || "",
+        status: rows[i][AFFILIATE_COLUMNS.REKENING_STATUS - 1] || "",
+        updated_at: rows[i][AFFILIATE_COLUMNS.REKENING_UPDATED_AT - 1] || "",
+      },
     });
   }
   return jsonResponse({ success: true, data: affiliates });
@@ -1631,6 +1570,7 @@ function handleMarkWaSent(type, id) {
         return jsonResponse({ success: true });
       }
     }
+    return jsonResponse({ success: false, message: "User tidak ditemukan" });
   } else if (type === "affiliate") {
     const sheet = getAffiliateSheet();
     const rows = sheet.getDataRange().getValues();
@@ -1640,68 +1580,36 @@ function handleMarkWaSent(type, id) {
         return jsonResponse({ success: true });
       }
     }
-  }
-
-  return jsonResponse({ success: false, message: "Data tidak ditemukan" });
-}
-
-// Save/Edit Rekening Affiliate
-function handleSaveRekening(data) {
-  if (
-    !data.affiliate_id ||
-    !data.rekening_bank ||
-    !data.nomor_rekening ||
-    !data.atas_nama
-  )
     return jsonResponse({
       success: false,
-      message: "Data rekening tidak lengkap",
+      message: "Affiliate tidak ditemukan",
     });
+  }
+
+  return jsonResponse({ success: false, message: "Tipe tidak dikenal" });
+}
+
+// ─── Save Rekening (Affiliate) ────────────────────────────────
+function handleSaveRekening(data) {
+  if (!data.affiliate_id || !data.bank || !data.nomor || !data.atas_nama) {
+    return jsonResponse({ success: false, message: "Data tidak lengkap" });
+  }
 
   const sheet = getAffiliateSheet();
   const rows = sheet.getDataRange().getValues();
 
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === data.affiliate_id) {
-      const wdSheet = getWithdrawalSheet();
-      const wdRows = wdSheet.getDataRange().getValues();
-      for (let j = 1; j < wdRows.length; j++) {
-        if (wdRows[j][1] === data.affiliate_id && wdRows[j][6] === "pending") {
-          return jsonResponse({
-            success: false,
-            message: "Tidak bisa edit rekening saat ada pencairan pending",
-          });
-        }
-      }
-
-      const lastUpdated = rows[i][AFFILIATE_COLUMNS.REKENING_UPDATED_AT - 1];
-      if (lastUpdated) {
-        const lastDate = new Date(lastUpdated);
-        const now = new Date();
-        const diffDays = (now - lastDate) / (1000 * 60 * 60 * 24);
-        if (diffDays < 7) {
-          const nextEdit = new Date(
-            lastDate.getTime() + 7 * 24 * 60 * 60 * 1000,
-          );
-          return jsonResponse({
-            success: false,
-            message:
-              "Rekening bisa diedit lagi pada " +
-              nextEdit.toLocaleDateString("id-ID", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-              }),
-          });
-        }
+      if (rows[i][AFFILIATE_COLUMNS.STATUS - 1] !== "active") {
+        return jsonResponse({ success: false, message: "Akun belum aktif" });
       }
 
       sheet
         .getRange(i + 1, AFFILIATE_COLUMNS.REKENING_BANK)
-        .setValue(data.rekening_bank);
+        .setValue(data.bank);
       sheet
         .getRange(i + 1, AFFILIATE_COLUMNS.NOMOR_REKENING)
-        .setValue(data.nomor_rekening);
+        .setValue(data.nomor);
       sheet
         .getRange(i + 1, AFFILIATE_COLUMNS.ATAS_NAMA)
         .setValue(data.atas_nama);
@@ -1714,7 +1622,7 @@ function handleSaveRekening(data) {
 
       return jsonResponse({
         success: true,
-        message: "Rekening berhasil diajukan, menunggu verifikasi admin",
+        message: "Rekening berhasil disimpan, menunggu verifikasi admin",
       });
     }
   }
@@ -1722,13 +1630,10 @@ function handleSaveRekening(data) {
   return jsonResponse({ success: false, message: "Affiliate tidak ditemukan" });
 }
 
-// Approve Rekening (Admin)
+// ─── Approve Rekening (Admin) ─────────────────────────────────
 function handleApproveRekening(affiliate_id) {
   if (!affiliate_id)
-    return jsonResponse({
-      success: false,
-      message: "affiliate_id diperlukan",
-    });
+    return jsonResponse({ success: false, message: "affiliate_id diperlukan" });
 
   const sheet = getAffiliateSheet();
   const rows = sheet.getDataRange().getValues();
@@ -1738,12 +1643,17 @@ function handleApproveRekening(affiliate_id) {
       if (rows[i][AFFILIATE_COLUMNS.REKENING_STATUS - 1] !== "pending") {
         return jsonResponse({
           success: false,
-          message: "Tidak ada rekening pending untuk diapprove",
+          message: "Tidak ada rekening pending untuk diverifikasi",
         });
       }
+
       sheet
         .getRange(i + 1, AFFILIATE_COLUMNS.REKENING_STATUS)
-        .setValue("active");
+        .setValue("verified");
+      sheet
+        .getRange(i + 1, AFFILIATE_COLUMNS.REKENING_UPDATED_AT)
+        .setValue(new Date().toISOString());
+
       return jsonResponse({
         success: true,
         message: "Rekening berhasil diverifikasi",
@@ -1754,100 +1664,87 @@ function handleApproveRekening(affiliate_id) {
   return jsonResponse({ success: false, message: "Affiliate tidak ditemukan" });
 }
 
-// Get Withdrawal History (Affiliate)
+// ─── Get Withdrawal History (Affiliate) ───────────────────────
 function handleGetWithdrawalHistory(affiliate_id) {
   if (!affiliate_id)
-    return jsonResponse({
-      success: false,
-      message: "affiliate_id diperlukan",
-    });
+    return jsonResponse({ success: false, message: "affiliate_id diperlukan" });
 
   const wdSheet = getWithdrawalSheet();
   const wdRows = wdSheet.getDataRange().getValues();
   const history = [];
 
   for (let i = 1; i < wdRows.length; i++) {
+    if (!wdRows[i][0]) continue;
     if (wdRows[i][1] === affiliate_id) {
       history.push({
         withdrawal_id: wdRows[i][0],
-        nominal: wdRows[i][2],
-        rekening_bank: wdRows[i][3],
-        nomor_rekening: wdRows[i][4],
-        atas_nama: wdRows[i][5],
-        status: wdRows[i][6],
-        created_at: wdRows[i][7],
-        approved_at: wdRows[i][8] || "",
+        nominal: Number(wdRows[i][2]) || 0,
+        rekening_bank: wdRows[i][3] || "",
+        nomor_rekening: wdRows[i][4] || "",
+        atas_nama: wdRows[i][5] || "",
+        status: wdRows[i][6] || "",
+        created_at: wdRows[i][7] || "",
+        processed_at: wdRows[i][8] || "",
       });
     }
   }
 
+  // Urutkan dari terbaru
+  history.sort(
+    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+  );
+
   return jsonResponse({ success: true, data: history });
 }
 
-// ─── Get All Withdrawal Requests (Admin) ──────────────────────
+// ─── Get All Withdrawals (Admin) ──────────────────────────────
 function handleGetAllWithdrawals() {
   const wdSheet = getWithdrawalSheet();
   const wdRows = wdSheet.getDataRange().getValues();
-  const affSheet = getAffiliateSheet();
-  const affRows = affSheet.getDataRange().getValues();
-  const results = [];
+  const withdrawals = [];
 
   for (let i = 1; i < wdRows.length; i++) {
     if (!wdRows[i][0]) continue;
-    const affiliateId = wdRows[i][1];
-    let nama = "";
-    let wa = "";
-    for (let j = 1; j < affRows.length; j++) {
-      if (affRows[j][0] === affiliateId) {
-        nama = affRows[j][AFFILIATE_COLUMNS.NAMA - 1];
-        wa = String(affRows[j][AFFILIATE_COLUMNS.WA - 1]).replace(/^'/, "");
-        break;
-      }
-    }
-    results.push({
+    withdrawals.push({
       withdrawal_id: wdRows[i][0],
-      affiliate_id: affiliateId,
-      nama,
-      wa,
-      nominal: wdRows[i][2],
-      rekening_bank: wdRows[i][3],
-      nomor_rekening: wdRows[i][4],
-      atas_nama: wdRows[i][5],
-      status: wdRows[i][6],
-      created_at: wdRows[i][7],
-      approved_at: wdRows[i][8] || "",
+      affiliate_id: wdRows[i][1] || "",
+      nominal: Number(wdRows[i][2]) || 0,
+      rekening_bank: wdRows[i][3] || "",
+      nomor_rekening: wdRows[i][4] || "",
+      atas_nama: wdRows[i][5] || "",
+      status: wdRows[i][6] || "",
+      created_at: wdRows[i][7] || "",
+      processed_at: wdRows[i][8] || "",
     });
   }
 
-  return jsonResponse({ success: true, data: results });
+  // Urutkan dari terbaru
+  withdrawals.sort(
+    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+  );
+
+  return jsonResponse({ success: true, data: withdrawals });
 }
 
-// ─── Get User Orders by USER_ID_REF ──────────────────────────
+// ─── Get User Orders ──────────────────────────────────────────
 function handleGetUserOrders(user_id) {
   if (!user_id)
     return jsonResponse({ success: false, message: "user_id diperlukan" });
 
   const sheet = getSheet();
-  const rows = sheet.getDataRange().getValues();
+  const data = sheet.getDataRange().getValues();
   const orders = [];
 
-  for (let i = 1; i < rows.length; i++) {
-    if (!rows[i][0]) continue;
-    if (rows[i][COLUMNS.USER_ID_REF - 1] === user_id) {
-      orders.push({
-        order_id: rows[i][COLUMNS.ORDER_ID - 1],
-        jenis: rows[i][COLUMNS.JENIS - 1],
-        halaman: rows[i][COLUMNS.HALAMAN - 1],
-        status: rows[i][COLUMNS.STATUS - 1],
-        harga: rows[i][COLUMNS.HARGA - 1] || 0,
-        tipe_order: rows[i][COLUMNS.TIPE_ORDER - 1] || "standar",
-        created_at: rows[i][COLUMNS.CREATED_AT - 1] || "",
-      });
+  for (let i = 1; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    if (data[i][COLUMNS.USER_ID_REF - 1] === user_id) {
+      orders.push(rowToObject(data[i]));
     }
   }
 
-  // Sort by created_at terbaru
-  orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  orders.sort(
+    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+  );
 
   return jsonResponse({ success: true, data: orders });
 }
@@ -1868,10 +1765,18 @@ function handleGetAffiliateMutations(affiliate_id) {
       mutations.push({
         type: "komisi",
         label: "Komisi Order",
-        detail: `Order ke-${commRows[i][3]} dari ${commRows[i][1]} (${commRows[i][5]}%)`,
+        detail:
+          "Order ke-" +
+          commRows[i][3] +
+          " dari " +
+          commRows[i][1] +
+          " (" +
+          commRows[i][5] +
+          "%)",
         nominal: Number(commRows[i][6]) || 0,
         sign: "plus",
         date: commRows[i][7] || "",
+        ref_id: commRows[i][2] || "",
       });
     }
   }
@@ -1885,16 +1790,31 @@ function handleGetAffiliateMutations(affiliate_id) {
       mutations.push({
         type: "pencairan",
         label: "Pencairan",
-        detail: `${wdRows[i][3]} - ${wdRows[i][4]} (${wdRows[i][5]})`,
+        detail: wdRows[i][3] + " - " + wdRows[i][4] + " (" + wdRows[i][5] + ")",
         nominal: Number(wdRows[i][2]) || 0,
         sign: "minus",
         date: wdRows[i][8] || wdRows[i][7] || "",
+        ref_id: wdRows[i][0] || "",
       });
     }
   }
 
-  // Sort by date terbaru
-  mutations.sort((a, b) => new Date(b.date) - new Date(a.date));
+  // Sort by date dari terlama ke terbaru untuk hitung running balance
+  mutations.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // Hitung running balance per baris
+  var runningBalance = 0;
+  for (var i = 0; i < mutations.length; i++) {
+    if (mutations[i].sign === "plus") {
+      runningBalance += mutations[i].nominal;
+    } else {
+      runningBalance -= mutations[i].nominal;
+    }
+    mutations[i].saldo_setelah = runningBalance;
+  }
+
+  // Reverse agar terbaru di atas
+  mutations.reverse();
 
   return jsonResponse({ success: true, data: mutations });
 }
@@ -1910,25 +1830,24 @@ function handleGetAffiliateWithdrawalRequests(affiliate_id) {
 
   for (let i = 1; i < wdRows.length; i++) {
     if (!wdRows[i][0]) continue;
-    if (
-      wdRows[i][1] === affiliate_id &&
-      (wdRows[i][6] === "pending" || wdRows[i][6] === "rejected")
-    ) {
+    if (wdRows[i][1] === affiliate_id && wdRows[i][6] !== "approved") {
       requests.push({
         withdrawal_id: wdRows[i][0],
         nominal: Number(wdRows[i][2]) || 0,
-        rekening_bank: wdRows[i][3],
-        nomor_rekening: wdRows[i][4],
-        atas_nama: wdRows[i][5],
-        status: wdRows[i][6],
+        rekening_bank: wdRows[i][3] || "",
+        nomor_rekening: wdRows[i][4] || "",
+        atas_nama: wdRows[i][5] || "",
+        status: wdRows[i][6] || "",
         created_at: wdRows[i][7] || "",
-        approved_at: wdRows[i][8] || "",
+        processed_at: wdRows[i][8] || "",
       });
     }
   }
 
-  // Sort by date terbaru
-  requests.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  // Urutkan dari terbaru
+  requests.sort(
+    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+  );
 
   return jsonResponse({ success: true, data: requests });
 }
