@@ -50,6 +50,7 @@ const COLUMNS = {
   CEK_FILE_AT: 26,
   USER_ID_REF: 27,
   POIN_DIPAKAI: 28,
+  KATEGORI_ORDER: 29,
 };
 
 const USER_COLUMNS = {
@@ -389,6 +390,7 @@ function handleCreateOrder(data) {
     "",
     data.user_id || "",
     data.poin_dipakai || 0,
+    data.kategori_order || "A",
   ]);
 
   sendAdminNotification(
@@ -454,6 +456,35 @@ function handleUpdateStatus(
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === order_id) {
       sheet.getRange(i + 1, COLUMNS.STATUS).setValue(status);
+      // Kategori C: admin approve verifikasi → langsung proses pengerjaan
+      if (status === "menunggu pembayaran dp") {
+        var kategoriOrderC = data[i][COLUMNS.KATEGORI_ORDER - 1] || "A";
+        if (kategoriOrderC === "C") {
+          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("proses pengerjaan");
+          // Hitung estimasi selesai
+          var jenisC = data[i][COLUMNS.JENIS - 1];
+          var halamanC = Number(data[i][COLUMNS.HALAMAN - 1]) || 1;
+          var tipeOrderC = data[i][COLUMNS.TIPE_ORDER - 1] || "standar";
+          var jamTotalC = 0;
+          if (jenisC === "Makalah" || jenisC === "Artikel") {
+            jamTotalC = 3 * 24 + (halamanC - 10) * 2;
+          } else if (jenisC === "PPT") {
+            jamTotalC = 4 * 24 + (halamanC - 5) * 2.5;
+          } else if (jenisC === "Tugas Harian") {
+            jamTotalC = 3 * 24 + (halamanC - 2) * 3;
+          } else {
+            jamTotalC = 3 * 24;
+          }
+          if (tipeOrderC === "ekspres") jamTotalC -= 24;
+          if (tipeOrderC === "super ekspres") jamTotalC -= 48;
+          var estimasiC = new Date(
+            new Date().getTime() + jamTotalC * 60 * 60 * 1000,
+          );
+          sheet
+            .getRange(i + 1, COLUMNS.ESTIMASI_SELESAI)
+            .setValue(estimasiC.toISOString());
+        }
+      }
       if (status === "proses pengerjaan" && estimasi_selesai) {
         sheet
           .getRange(i + 1, COLUMNS.ESTIMASI_SELESAI)
@@ -711,7 +742,13 @@ function handleUpdatePaymentStatus(data) {
     if (rows[i][0] === data.order_id) {
       if (data.tipe === "dp") {
         sheet.getRange(i + 1, 22).setValue(data.mayar_transaction_id || "");
-        sheet.getRange(i + 1, 8).setValue("proses pengerjaan");
+        var kategoriOrder = rows[i][COLUMNS.KATEGORI_ORDER - 1] || "A";
+        if (kategoriOrder === "B") {
+          // Kategori B: bayar sekaligus, skip pelunasan langsung proses pengerjaan
+          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("proses pengerjaan");
+        } else {
+          sheet.getRange(i + 1, COLUMNS.STATUS).setValue("proses pengerjaan");
+        }
         // Kalkulasi estimasi selesai otomatis
         var jenis = rows[i][COLUMNS.JENIS - 1];
         var halaman = Number(rows[i][COLUMNS.HALAMAN - 1]) || 1;
@@ -746,6 +783,15 @@ function handleUpdatePaymentStatus(data) {
           },
         );
       } else if (data.tipe === "final") {
+        var kategoriOrderFinal = rows[i][COLUMNS.KATEGORI_ORDER - 1] || "A";
+        // Kategori B tidak punya pelunasan, jadi blok ini tidak akan dipanggil
+        // Tapi sebagai safety, cek dulu
+        if (kategoriOrderFinal === "B") {
+          return jsonResponse({
+            success: false,
+            message: "Order kategori B tidak memiliki pelunasan",
+          });
+        }
         sheet.getRange(i + 1, 23).setValue(data.mayar_transaction_id || "");
         sheet.getRange(i + 1, 8).setValue("cek file");
         sheet

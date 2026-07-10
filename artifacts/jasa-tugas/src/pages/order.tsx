@@ -353,13 +353,41 @@ export default function OrderPage() {
     const saldoPoin = userAkun?.saldo_poin ?? 0;
     const diskonReferral = pakaiDiskonReferral ? 10000 : 0;
     const hSetelahReferral = hargaFinal - diskonReferral;
-    const maxDiskonPoin = pakaiPoin
-      ? Math.min(saldoPoin * 1000, hSetelahReferral)
-      : 0;
-    const hFinal = Math.max(0, hSetelahReferral - maxDiskonPoin);
-    const poinDipakai = pakaiPoin ? Math.floor(maxDiskonPoin / 1000) : 0;
-    const dpFinal = Math.ceil(hFinal * 0.33);
-    const sisaFinal = Math.max(0, hFinal - dpFinal);
+
+    // Logika pembatasan poin
+    let poinDipakai = 0;
+    let hFinal = hSetelahReferral;
+
+    if (pakaiPoin && saldoPoin > 0) {
+      const nilaiPoinTotal = saldoPoin * 1000;
+      if (nilaiPoinTotal >= hSetelahReferral) {
+        poinDipakai = Math.ceil(hSetelahReferral / 1000);
+        const maxDiskonPoin = poinDipakai * 1000;
+        hFinal = 0;
+      } else if (hSetelahReferral - nilaiPoinTotal < 2000) {
+        const sisaTarget = 2000;
+        const maxPotongan = hSetelahReferral - sisaTarget;
+        poinDipakai = Math.floor(maxPotongan / 1000);
+        const maxDiskonPoin = poinDipakai * 1000;
+        hFinal = hSetelahReferral - maxDiskonPoin;
+      } else {
+        poinDipakai = saldoPoin;
+        const maxDiskonPoin = nilaiPoinTotal;
+        hFinal = hSetelahReferral - maxDiskonPoin;
+      }
+    }
+
+    // Tentukan kategori order
+    const kategoriOrder = hFinal === 0 ? "C" : hFinal < 5000 ? "B" : "A";
+
+    // Kalkulasi DP dan sisa berdasarkan kategori
+    const dpFinal =
+      kategoriOrder === "C"
+        ? 0
+        : kategoriOrder === "B"
+          ? hFinal
+          : Math.ceil(hFinal * 0.33);
+    const sisaFinal = kategoriOrder === "A" ? Math.max(0, hFinal - dpFinal) : 0;
 
     // Validasi diskon referral tidak bikin minus
     const referralValid = hargaFinal - 10000 >= 0;
@@ -378,6 +406,7 @@ export default function OrderPage() {
         user_id: loggedUserId || undefined,
         poin_dipakai: poinDipakai,
         pakai_diskon_referral: pakaiDiskonReferral,
+        kategori_order: kategoriOrder,
       } as any;
 
       // GANTI bagian setelah mutateAsync berhasil:
@@ -548,13 +577,49 @@ export default function OrderPage() {
     const saldoPoin = userAkun?.saldo_poin ?? 0;
     const diskonReferral = pakaiDiskonReferral ? 10000 : 0;
     const hSetelahReferral = hTotal - diskonReferral;
-    const maxDiskonPoin = pakaiPoin
-      ? Math.min(saldoPoin * 1000, hSetelahReferral)
-      : 0;
-    const hFinal = Math.max(0, hSetelahReferral - maxDiskonPoin);
-    const poinDipakai = pakaiPoin ? Math.floor(maxDiskonPoin / 1000) : 0;
-    const dpFinal = Math.ceil(hFinal * 0.33);
-    const sisaFinal = Math.max(0, hFinal - dpFinal);
+
+    // Logika pembatasan poin
+    let poinDipakai = 0;
+    let maxDiskonPoin = 0;
+    let poinTersisa = 0;
+    let hFinal = hSetelahReferral;
+
+    if (pakaiPoin && saldoPoin > 0) {
+      const nilaiPoinTotal = saldoPoin * 1000;
+      if (nilaiPoinTotal >= hSetelahReferral) {
+        // Poin cukup nutup semua → harga = 0 (Kategori C)
+        poinDipakai = Math.ceil(hSetelahReferral / 1000);
+        maxDiskonPoin = poinDipakai * 1000;
+        poinTersisa = saldoPoin - poinDipakai;
+        hFinal = 0;
+      } else if (hSetelahReferral - nilaiPoinTotal < 2000) {
+        // Pakai poin penuh akan membuat sisa < 2000 → batasi agar sisa = 2000
+        const sisaTarget = 2000;
+        const maxPotongan = hSetelahReferral - sisaTarget;
+        poinDipakai = Math.floor(maxPotongan / 1000);
+        maxDiskonPoin = poinDipakai * 1000;
+        poinTersisa = saldoPoin - poinDipakai;
+        hFinal = hSetelahReferral - maxDiskonPoin;
+      } else {
+        // Pakai semua poin, sisa masih >= 2000
+        poinDipakai = saldoPoin;
+        maxDiskonPoin = nilaiPoinTotal;
+        poinTersisa = 0;
+        hFinal = hSetelahReferral - maxDiskonPoin;
+      }
+    }
+
+    // Tentukan kategori order
+    const kategoriOrder = hFinal === 0 ? "C" : hFinal < 5000 ? "B" : "A";
+
+    // Kalkulasi DP dan sisa berdasarkan kategori
+    const dpFinal =
+      kategoriOrder === "C"
+        ? 0
+        : kategoriOrder === "B"
+          ? hFinal
+          : Math.ceil(hFinal * 0.33);
+    const sisaFinal = kategoriOrder === "A" ? Math.max(0, hFinal - dpFinal) : 0;
 
     // Validasi diskon referral tidak bikin minus
     const referralValid = hTotal - 10000 >= 0;
@@ -704,6 +769,39 @@ export default function OrderPage() {
                         />
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Keterangan poin tersisa */}
+                {pakaiPoin && poinTersisa > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+                    <p className="font-medium">Catatan Poin:</p>
+                    <p>
+                      {poinDipakai} poin dipakai, {poinTersisa} poin tersisa
+                      tidak dapat digunakan untuk order ini.
+                    </p>
+                  </div>
+                )}
+
+                {/* Keterangan kategori B */}
+                {kategoriOrder === "B" && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+                    <p className="font-medium">Pembayaran Sekaligus</p>
+                    <p>
+                      Total harga di bawah Rp 5.000, pembayaran dilakukan
+                      sekaligus tanpa pelunasan.
+                    </p>
+                  </div>
+                )}
+
+                {/* Keterangan kategori C */}
+                {kategoriOrder === "C" && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-700">
+                    <p className="font-medium">Order Gratis</p>
+                    <p>
+                      Seluruh biaya ditanggung oleh poin Anda. Tidak ada
+                      pembayaran yang diperlukan.
+                    </p>
                   </div>
                 )}
 

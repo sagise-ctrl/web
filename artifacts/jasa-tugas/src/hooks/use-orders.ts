@@ -43,6 +43,7 @@ export interface Order {
   payment_final_id?: string;
   penyesuaian_nominal?: number;
   penyesuaian_keterangan?: string;
+  kategori_order?: string;
 }
 
 export interface WaCheckResult {

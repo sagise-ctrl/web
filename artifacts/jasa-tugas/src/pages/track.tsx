@@ -712,11 +712,20 @@ export default function TrackPage() {
                     <CreditCard className="w-5 h-5" />
                     <span>Lakukan Pembayaran DP</span>
                   </div>
-                  <p className="text-sm text-amber-700">
-                    Pesanan Anda telah diverifikasi! Bayar DP{" "}
-                    <strong>{formatRupiah(dp)}</strong> untuk memulai
-                    pengerjaan. Anda bisa bayar via QRIS.
-                  </p>
+                  {order.kategori_order === "B" ? (
+                    <p className="text-sm text-amber-700">
+                      Pesanan Anda telah diverifikasi! Lakukan pembayaran
+                      sekaligus <strong>{formatRupiah(dp)}</strong> untuk
+                      memulai pengerjaan. Tidak ada pembayaran pelunasan untuk
+                      order ini.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-amber-700">
+                      Pesanan Anda telah diverifikasi! Bayar DP{" "}
+                      <strong>{formatRupiah(dp)}</strong> untuk memulai
+                      pengerjaan. Anda bisa bayar via QRIS.
+                    </p>
+                  )}
                   {order.penyesuaian_nominal != null &&
                     order.penyesuaian_nominal !== 0 && (
                       <div className="bg-amber-100 border border-amber-300 rounded-lg p-3 space-y-1">
@@ -755,6 +764,14 @@ export default function TrackPage() {
             {/* ── Proses Pengerjaan ── */}
             {order.status === "proses pengerjaan" && (
               <div className="space-y-3">
+                {order.kategori_order === "C" && (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-700">
+                    <p className="font-semibold">Order Gratis dari Poin</p>
+                    <p className="text-xs mt-1">
+                      Seluruh biaya order ini ditanggung oleh poin Anda.
+                    </p>
+                  </div>
+                )}
                 <Alert className="bg-blue-50 border-blue-200">
                   <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
                   <AlertTitle className="text-blue-800">
@@ -782,30 +799,31 @@ export default function TrackPage() {
             )}
 
             {/* ── Menunggu Pelunasan ── */}
-            {order.status === "menunggu pelunasan" && (
-              <Card className="border-cyan-200 bg-cyan-50">
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-center gap-2 text-cyan-800 font-semibold">
-                    <CreditCard className="w-5 h-5" />
-                    <span>Lakukan Pembayaran Pelunasan</span>
-                  </div>
-                  <p className="text-sm text-cyan-700">
-                    Tugas Anda sudah selesai dikerjakan! Bayar sisa{" "}
-                    <strong>{formatRupiah(sisa)}</strong> untuk mengaktifkan
-                    file unduhan.
-                  </p>
-                  <TombolBayar
-                    orderId={order.order_id}
-                    tipe="final"
-                    label="Bayar Pelunasan"
-                    nominal={sisa}
-                    nama={order.nama}
-                    wa={order.wa}
-                    onSuccess={() => refetch()}
-                  />
-                </CardContent>
-              </Card>
-            )}
+            {order.status === "menunggu pelunasan" &&
+              order.kategori_order !== "B" && (
+                <Card className="border-cyan-200 bg-cyan-50">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center gap-2 text-cyan-800 font-semibold">
+                      <CreditCard className="w-5 h-5" />
+                      <span>Lakukan Pembayaran Pelunasan</span>
+                    </div>
+                    <p className="text-sm text-cyan-700">
+                      Tugas Anda sudah selesai dikerjakan! Bayar sisa{" "}
+                      <strong>{formatRupiah(sisa)}</strong> untuk mengaktifkan
+                      file unduhan.
+                    </p>
+                    <TombolBayar
+                      orderId={order.order_id}
+                      tipe="final"
+                      label="Bayar Pelunasan"
+                      nominal={sisa}
+                      nama={order.nama}
+                      wa={order.wa}
+                      onSuccess={() => refetch()}
+                    />
+                  </CardContent>
+                </Card>
+              )}
 
             {/* ── Pelunasan Diterima ── */}
             {order.status === "pelunasan diterima" && (
