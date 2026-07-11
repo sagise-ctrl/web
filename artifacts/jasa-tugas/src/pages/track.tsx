@@ -719,7 +719,7 @@ export default function TrackPage() {
                   {order.kategori_order === "B" ? (
                     <p className="text-sm text-amber-700">
                       Pesanan Anda telah diverifikasi! Lakukan pembayaran
-                      sekaligus <strong>{formatRupiah(dp)}</strong> untuk
+                      sekaligus <strong>{formatRupiah(harga)}</strong> untuk
                       memulai pengerjaan. Tidak ada pembayaran pelunasan untuk
                       order ini.
                     </p>

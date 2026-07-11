@@ -484,6 +484,24 @@ function handleUpdateStatus(
           sheet
             .getRange(i + 1, COLUMNS.ESTIMASI_SELESAI)
             .setValue(estimasiC.toISOString());
+          // Kurangi poin untuk kategori C saat proses pengerjaan
+          var poinDipakaiC = Number(data[i][COLUMNS.POIN_DIPAKAI - 1]) || 0;
+          var userIdRefC = data[i][COLUMNS.USER_ID_REF - 1] || "";
+          if (poinDipakaiC > 0 && userIdRefC) {
+            var userSheetC = getUserSheet();
+            var userRowsC = userSheetC.getDataRange().getValues();
+            for (var u = 1; u < userRowsC.length; u++) {
+              if (userRowsC[u][0] === userIdRefC) {
+                var saldoSaatIniC =
+                  Number(userRowsC[u][USER_COLUMNS.SALDO_POIN - 1]) || 0;
+                var saldoBaruC = Math.max(0, saldoSaatIniC - poinDipakaiC);
+                userSheetC
+                  .getRange(u + 1, USER_COLUMNS.SALDO_POIN)
+                  .setValue(saldoBaruC);
+                break;
+              }
+            }
+          }
         }
       }
       if (status === "proses pengerjaan" && estimasi_selesai) {
@@ -749,6 +767,24 @@ function handleUpdatePaymentStatus(data) {
           sheet.getRange(i + 1, COLUMNS.STATUS).setValue("proses pengerjaan");
         } else {
           sheet.getRange(i + 1, COLUMNS.STATUS).setValue("proses pengerjaan");
+        }
+        // Kurangi poin saat status proses pengerjaan
+        var poinDipakaiDP = Number(rows[i][COLUMNS.POIN_DIPAKAI - 1]) || 0;
+        var userIdRefDP = rows[i][COLUMNS.USER_ID_REF - 1] || "";
+        if (poinDipakaiDP > 0 && userIdRefDP) {
+          var userSheetDP = getUserSheet();
+          var userRowsDP = userSheetDP.getDataRange().getValues();
+          for (var u = 1; u < userRowsDP.length; u++) {
+            if (userRowsDP[u][0] === userIdRefDP) {
+              var saldoSaatIniDP =
+                Number(userRowsDP[u][USER_COLUMNS.SALDO_POIN - 1]) || 0;
+              var saldoBaruDP = Math.max(0, saldoSaatIniDP - poinDipakaiDP);
+              userSheetDP
+                .getRange(u + 1, USER_COLUMNS.SALDO_POIN)
+                .setValue(saldoBaruDP);
+              break;
+            }
+          }
         }
         // Kalkulasi estimasi selesai otomatis
         var jenis = rows[i][COLUMNS.JENIS - 1];
@@ -1306,7 +1342,8 @@ function handleOrderLunas(order_id, user_id, harga_order, poin_dipakai) {
   for (let i = 1; i < userRows.length; i++) {
     if (userRows[i][0] === user_id) {
       const saldoSekarang = Number(userRows[i][5]) || 0;
-      const saldoBaru = saldoSekarang - poin_dipakai + poin_didapat;
+      // Poin sudah dikurangi saat proses pengerjaan, jadi hanya tambah poin didapat
+      const saldoBaru = saldoSekarang + poin_didapat;
       userSheet.getRange(i + 1, 6).setValue(saldoBaru);
       break;
     }
