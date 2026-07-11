@@ -656,7 +656,11 @@ export default function TrackPage() {
                             {formatRupiah(harga)}
                           </div>
                           <div className="text-xs text-slate-500">
-                            DP: {formatRupiah(dp)} | Sisa: {formatRupiah(sisa)}
+                            {order.kategori_order === "B"
+                              ? `Bayar Sekaligus: ${formatRupiah(harga)}`
+                              : order.kategori_order === "C"
+                                ? "Gratis (dari poin)"
+                                : `DP: ${formatRupiah(dp)} | Sisa: ${formatRupiah(sisa)}`}
                           </div>
                         </div>
                       }
@@ -751,8 +755,12 @@ export default function TrackPage() {
                   <TombolBayar
                     orderId={order.order_id}
                     tipe="dp"
-                    label="Bayar DP"
-                    nominal={dp}
+                    label={
+                      order.kategori_order === "B"
+                        ? "Bayar Sekaligus"
+                        : "Bayar DP"
+                    }
+                    nominal={order.kategori_order === "B" ? harga : dp}
                     nama={order.nama}
                     wa={order.wa}
                     onSuccess={() => refetch()}

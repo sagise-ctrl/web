@@ -182,6 +182,7 @@ function rowToObject(row) {
     snap_token: row[20] || "",
     payment_dp_id: row[21] || "",
     payment_final_id: row[22] || "",
+    kategori_order: row[COLUMNS.KATEGORI_ORDER - 1] || "A",
     penyesuaian_nominal: penyesuaianNominal,
     penyesuaian_keterangan: penyesuaianKeterangan,
   };
