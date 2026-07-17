@@ -70,8 +70,7 @@ const CARA_KERJA = [
     icon: <ShieldCheck className="w-6 h-6" />,
     step: "2",
     judul: "Verifikasi & Bayar DP",
-    deskripsi:
-      "Admin verifikasi pesanan, lalu kamu bayar DP 33% via QRIS atau e-wallet.",
+    deskripsi: "Admin verifikasi pesanan, lalu kamu bayar DP 33% via QRIS.",
   },
   {
     icon: <Clock className="w-6 h-6" />,
@@ -112,7 +111,7 @@ const FAQS = [
   },
   {
     q: "Bagaimana cara jadi affiliate?",
-    a: "Daftar di halaman Affiliate, tunggu verifikasi admin, lalu bagikan kode referral kamu. Dapatkan komisi 30% dari order pertama setiap user yang kamu referensikan, menurun hingga order ke-10.",
+    a: "Daftar di halaman Affiliate, tunggu verifikasi admin, lalu bagikan kode referral kamu. Dapatkan komisi 30% dari order pertama setiap user yang kamu referensikan.",
   },
 ];
 
@@ -187,11 +186,11 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Cara Kerja */}
+        {/* Cara Order */}
         <section className="max-w-5xl mx-auto w-full">
           <div className="text-center mb-8">
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
-              Cara Kerja
+              Cara Order
             </h2>
             <p className="text-slate-500 mt-2 text-sm">
               Proses simpel, hasil maksimal
@@ -215,11 +214,11 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Layanan & Harga */}
+        {/* Layanan & Fee */}
         <section className="max-w-5xl mx-auto w-full">
           <div className="text-center mb-8">
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
-              Layanan & Harga
+              Layanan & Fee
             </h2>
             <p className="text-slate-500 mt-2 text-sm">
               Harga transparan, tidak ada biaya tersembunyi
@@ -361,9 +360,12 @@ export default function Home() {
                   Dapat Komisi dari Setiap Referral
                 </h2>
                 <p className="text-slate-600 text-sm leading-relaxed">
-                  Bagikan kode referral kamu ke teman-teman. Setiap kali mereka
-                  order, kamu dapat komisi hingga <strong>30%</strong> dari
-                  nilai order. Berlaku sampai order ke-10 per user.
+                  Bagikan kode referral kamu ke teman-temanmu. Setiap kali
+                  mereka order, kamu dapat komisi hingga <strong>30%</strong>{" "}
+                  dari nilai order, berlaku sampai order ke-10 per user. Semakin
+                  banyak teman yang kamu ajak, semakin besar total komisi yang
+                  kamu kumpulkan, tidak ada batas jumlah user yang bisa kamu
+                  referensikan.
                 </p>
                 <div className="grid grid-cols-3 gap-3 pt-2">
                   {[
