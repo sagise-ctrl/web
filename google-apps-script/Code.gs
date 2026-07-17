@@ -1,16 +1,3 @@
-// ============================================================
-// JASA TUGAS - Google Apps Script Backend (v8)
-// ============================================================
-// ALUR STATUS:
-// verifikasi tugas
-// → menunggu pembayaran dp (admin approve)
-// → proses pengerjaan (webhook Midtrans: DP paid)
-// → menunggu pelunasan (admin upload hasil)
-// → pelunasan diterima (webhook Midtrans: pelunasan paid)
-// → cek file (otomatis)
-// → revisi / selesai (customer konfirmasi)
-// ============================================================
-
 const SPREADSHEET_ID = "1M46VQj9eGn4_Pn_bg0u4IAcuqnaAekEAHo-yeVXV9Eo";
 const SHEET_NAME = "Orders";
 const ADMIN_TOKENS_SHEET = "admin_tokens";
@@ -95,7 +82,44 @@ const VALID_STATUSES = [
 
 const VALID_JENIS = ["Makalah", "PPT", "Artikel", "Tugas Harian", "Test"];
 
+// ─── Kalkulasi Harga (sama persis dengan frontend) ────────────
+function hitungHarga(jenis, halaman) {
+  if (jenis === "Makalah" || jenis === "Artikel") {
+    var tier = Math.max(0, Math.ceil((halaman - 10) / 5));
+    return 30000 + tier * 5000;
+  }
+  if (jenis === "PPT") {
+    return 20000 + Math.max(0, halaman - 5) * 3000;
+  }
+  if (jenis === "Tugas Harian") {
+    return 20000 + Math.max(0, halaman - 2) * 4000;
+  }
+  if (jenis === "Test") {
+    return 5000;
+  }
+  return 0;
+}
+
+function biayaTambahan(tipeOrder) {
+  if (tipeOrder === "super ekspres") return 15000;
+  if (tipeOrder === "ekspres") return 7000;
+  return 0;
+}
+
+function hitungKategoriOrder(hFinal) {
+  if (hFinal === 0) return "C";
+  if (hFinal < 5000) return "B";
+  return "A";
+}
+
+function hitungDP(hFinal, kategori) {
+  if (kategori === "C") return 0;
+  if (kategori === "B") return hFinal;
+  return Math.ceil(hFinal * 0.33);
+}
+
 // ─── Sheet ────────────────────────────────────────────────────
+
 function getSheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
@@ -311,56 +335,63 @@ function handleCreateOrder(data) {
     return jsonResponse({ success: false, message: "Jenis tugas tidak valid" });
   }
 
-  // Kalkulasi harga final dengan diskon
-  var hargaFinal = Number(data.harga) || 0;
-  var dpFinal = Number(data.dp) || Math.ceil(hargaFinal * 0.33);
-  var sisaBayarFinal =
-    Number(data.sisa_bayar) || Math.max(0, hargaFinal - dpFinal);
+  // Kalkulasi server-side — tidak percaya nilai dari frontend
+  var hargaDasar = hitungHarga(data.jenis, Number(data.halaman));
+  var hargaTambahan = biayaTambahan(data.tipe_order || "standar");
+  var hTotal = hargaDasar + hargaTambahan;
 
-  // Validasi diskon referral jika ada user_id
-  if (data.user_id && data.pakai_diskon_referral) {
-    var userSheet = getUserSheet();
-    var userRows = userSheet.getDataRange().getValues();
-    var userFound = false;
-    for (var u = 1; u < userRows.length; u++) {
-      if (userRows[u][0] === data.user_id) {
-        userFound = true;
-        var kodeReferral = userRows[u][USER_COLUMNS.KODE_REFERRAL - 1];
-        if (!kodeReferral) {
-          return jsonResponse({
-            success: false,
-            message: "User tidak memiliki kode referral",
-          });
-        }
-        // Cek belum pernah order
-        var uoSheet = getUserOrdersSheet();
-        var uoRows = uoSheet.getDataRange().getValues();
-        var orderCount = 0;
-        for (var uo = 1; uo < uoRows.length; uo++) {
-          if (uoRows[uo][0] === data.user_id) orderCount++;
-        }
-        if (orderCount > 0) {
-          return jsonResponse({
-            success: false,
-            message: "Diskon referral hanya berlaku untuk order pertama",
-          });
+  // Validasi dan hitung poin
+  var poinDipakai = 0;
+  var diskonPoin = 0;
+  if (data.user_id && data.poin_dipakai > 0) {
+    var userSheetP = getUserSheet();
+    var userRowsP = userSheetP.getDataRange().getValues();
+    for (var up = 1; up < userRowsP.length; up++) {
+      if (userRowsP[up][0] === data.user_id) {
+        var saldoPoinServer =
+          Number(userRowsP[up][USER_COLUMNS.SALDO_POIN - 1]) || 0;
+        var hSetelahReferral = data.pakai_diskon_referral
+          ? hTotal - 10000
+          : hTotal;
+        var nilaiPoinTotal = saldoPoinServer * 1000;
+        if (nilaiPoinTotal >= hSetelahReferral) {
+          // Poin nutup semua
+          poinDipakai = Math.ceil(hSetelahReferral / 1000);
+          diskonPoin = poinDipakai * 1000;
+        } else if (hSetelahReferral - nilaiPoinTotal < 2000) {
+          // Batasi agar sisa = 2000
+          var maxPotongan = hSetelahReferral - 2000;
+          poinDipakai = Math.floor(maxPotongan / 1000);
+          diskonPoin = poinDipakai * 1000;
+        } else {
+          // Pakai semua poin
+          poinDipakai = saldoPoinServer;
+          diskonPoin = nilaiPoinTotal;
         }
         break;
       }
     }
-    if (!userFound) {
-      return jsonResponse({
-        success: false,
-        message: "User ID tidak ditemukan",
-      });
+  }
+
+  // Validasi diskon referral
+  var diskonReferral = 0;
+  if (data.user_id && data.pakai_diskon_referral) {
+    var uoSheetV = getUserOrdersSheet();
+    var uoRowsV = uoSheetV.getDataRange().getValues();
+    var orderCountV = 0;
+    for (var uov = 1; uov < uoRowsV.length; uov++) {
+      if (uoRowsV[uov][0] === data.user_id) orderCountV++;
+    }
+    if (orderCountV === 0 && hTotal - 10000 >= 0) {
+      diskonReferral = 10000;
     }
   }
 
-  const sheet = getSheet();
-  const order_id = generateOrderId();
-  const harga = hargaFinal;
-  const dp = dpFinal;
-  const sisa_bayar = sisaBayarFinal;
+  var hFinal = Math.max(0, hTotal - diskonReferral - diskonPoin);
+  var kategoriOrder = hitungKategoriOrder(hFinal);
+  var dp = hitungDP(hFinal, kategoriOrder);
+  var sisa_bayar = kategoriOrder === "A" ? Math.max(0, hFinal - dp) : 0;
+  var harga = hFinal;
 
   sheet.appendRow([
     order_id,
@@ -390,8 +421,8 @@ function handleCreateOrder(data) {
     "",
     "",
     data.user_id || "",
-    data.poin_dipakai || 0,
-    data.kategori_order || "A",
+    poinDipakai,
+    kategoriOrder,
   ]);
 
   sendAdminNotification(
@@ -649,12 +680,25 @@ function handleUploadFile(order_id, tipe, fileBase64, fileName) {
         } else if (tipe === "hasil") {
           sheet.getRange(i + 1, COLUMNS.HASIL_URL).setValue(fileUrl);
           const currentStatus = data[i][7];
+          const kategoriOrder = data[i][COLUMNS.KATEGORI_ORDER - 1] || "A";
           if (currentStatus === "proses pengerjaan") {
-            sheet
-              .getRange(i + 1, COLUMNS.STATUS)
-              .setValue("menunggu pelunasan");
+            if (kategoriOrder === "B" || kategoriOrder === "C") {
+              // Kategori B dan C tidak ada pelunasan, langsung cek file
+              sheet.getRange(i + 1, COLUMNS.STATUS).setValue("cek file");
+              sheet
+                .getRange(i + 1, COLUMNS.CEK_FILE_AT)
+                .setValue(new Date().toISOString());
+            } else {
+              // Kategori A normal
+              sheet
+                .getRange(i + 1, COLUMNS.STATUS)
+                .setValue("menunggu pelunasan");
+            }
           } else if (currentStatus === "revisi") {
             sheet.getRange(i + 1, COLUMNS.STATUS).setValue("cek file");
+            sheet
+              .getRange(i + 1, COLUMNS.CEK_FILE_AT)
+              .setValue(new Date().toISOString());
           }
         }
 
@@ -784,6 +828,20 @@ function handleUpdatePaymentStatus(data) {
                 .setValue(saldoBaruDP);
               break;
             }
+          }
+        }
+        // Kategori B: tidak ada pelunasan, panggil handleOrderLunas sekarang
+        if (kategoriOrder === "B") {
+          var hargaOrderB = Number(rows[i][COLUMNS.HARGA - 1]) || 0;
+          var poinDipakaiB = Number(rows[i][COLUMNS.POIN_DIPAKAI - 1]) || 0;
+          var userIdRefB = rows[i][COLUMNS.USER_ID_REF - 1] || "";
+          if (userIdRefB) {
+            handleOrderLunas(
+              data.order_id,
+              userIdRefB,
+              hargaOrderB,
+              poinDipakaiB,
+            );
           }
         }
         // Kalkulasi estimasi selesai otomatis

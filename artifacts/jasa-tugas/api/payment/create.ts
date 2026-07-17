@@ -5,36 +5,76 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
 
   const MAYAR_API_KEY = process.env.MAYAR_API_KEY;
-  if (!MAYAR_API_KEY)
+  const GAS_URL = process.env.GAS_URL;
+
+  if (!MAYAR_API_KEY || !GAS_URL)
     return res.status(500).json({ error: "Server tidak terkonfigurasi" });
 
   try {
-    const { order_id, nama, wa, harga, jenis, tipe } = req.body;
-    console.log(
-      "PAYMENT_CREATE_BODY:",
-      JSON.stringify({ order_id, nama, wa, harga, jenis, tipe }),
+    const { order_id, tipe } = req.body;
+
+    if (!order_id || !tipe)
+      return res.status(400).json({ error: "order_id dan tipe wajib diisi" });
+
+    // Ambil data order dari GSheet via GAS — tidak percaya nominal dari frontend
+    const gasRes = await fetch(
+      `${GAS_URL}?action=getOrder&order_id=${order_id}`,
     );
-    if (!order_id || !harga)
-      return res.status(400).json({ error: "Data tidak lengkap" });
-    if (Number(harga) < 2000)
-      return res.status(400).json({
-        error: "Nominal pembayaran minimal Rp 2.000",
-        code: "BELOW_MINIMUM",
-      });
-    const email = `${(wa || "").replace(/^0/, "")}@tugasly.my.id`;
+    const gasData = await gasRes.json();
+
+    if (!gasData.success || !gasData.data) {
+      return res.status(404).json({ error: "Order tidak ditemukan" });
+    }
+
+    const order = gasData.data;
+
+    // Tentukan nominal berdasarkan tipe dan kategori order
+    let amount = 0;
+    if (tipe === "dp") {
+      amount =
+        order.kategori_order === "B" ? Number(order.harga) : Number(order.dp);
+    } else if (tipe === "final") {
+      if (order.kategori_order === "B") {
+        return res
+          .status(400)
+          .json({ error: "Order kategori B tidak memiliki pelunasan" });
+      }
+      amount = Number(order.sisa_bayar);
+    }
+
+    if (!amount || amount < 2000) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Nominal pembayaran tidak valid atau di bawah minimum Rp 2.000",
+        });
+    }
+
+    const nama = order.nama;
+    const wa = String(order.wa).replace(/^'/, "");
+    const email = `${wa.replace(/^0/, "")}@tugasly.my.id`;
     const mobile = wa;
 
-    // Expired 24 jam dari sekarang
+    console.log(
+      "PAYMENT_CREATE:",
+      JSON.stringify({
+        order_id,
+        tipe,
+        amount,
+        kategori: order.kategori_order,
+      }),
+    );
+
     const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
     const payload = {
       name: nama,
       email,
-      amount: Number(harga),
+      amount,
       mobile,
       redirectUrl: `https://tugasly.my.id/track?id=${order_id}`,
       description: `Order ${order_id} [${tipe}]`,
-
       expiredAt,
     };
 
