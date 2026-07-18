@@ -4,7 +4,11 @@
       "Bash(git add *)",
       "Bash(git commit -m 'fix: update affiliate commission scheme \\(30%->27%...->3%, flat 1% for order 11+\\) *)",
       "Bash(git push *)",
-      "Bash(git commit -m 'fix\\(order\\): skip step 1 when logged user clicks '\\\\''Order Baru'\\\\'' *)"
+      "Bash(git commit -m 'fix\\(order\\): skip step 1 when logged user clicks '\\\\''Order Baru'\\\\'' *)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm run *)",
+      "Bash(pnpm --filter '@workspace/jasa-tugas' run build)",
+      "Bash(git commit -m 'chore: clean up unused files and dependencies *)"
     ]
   }
 }

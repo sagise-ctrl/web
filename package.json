@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
-    "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "build": "pnpm --filter '@workspace/jasa-tugas' run build",
+    "dev": "pnpm --filter '@workspace/jasa-tugas' run dev",
+    "typecheck": "pnpm --filter '@workspace/jasa-tugas' run typecheck"
   },
   "private": true,
   "devDependencies": {
