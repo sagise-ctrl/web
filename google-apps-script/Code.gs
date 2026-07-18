@@ -1409,8 +1409,8 @@ function hitungKomisiAffiliate(orderKe) {
 
 // ─── Handle Order Lunas (komisi affiliate + poin user) ────────
 function handleOrderLunas(order_id, user_id, harga_order, poin_dipakai) {
-  // Hitung poin
-  var poin_didapat = Math.floor(harga_order / 100) * 5;
+  // Hitung poin: 1 poin per Rp 15.000, bulatkan ke bawah
+  var poin_didapat = Math.floor(harga_order / 15000);
   var diskon_poin_rupiah = poin_dipakai * 1000;  // konversi poin ke rupiah
   var harga_dibayar = Math.max(0, harga_order - diskon_poin_rupiah);
 
