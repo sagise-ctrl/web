@@ -234,10 +234,13 @@ export default function OrderPage() {
     }
 
     if (loggedUserId && userAkunError) {
+      // User invalid/error, tapi tetap bisa lanjut tanpa step 1
       console.error("[Order] failed to load userAkun", {
         loggedUserId,
         error: userAkunError,
       });
+      // Tetep skip step 1, data akan null (order tetap bisa dibuat tanpa login data)
+      setStep(2);
     }
   }, [loggedUserId, userAkun, userAkunError, isUserAkunFetching]);
 
@@ -343,7 +346,22 @@ export default function OrderPage() {
 
   // ─── Step 3: kirim order + upload file pendukung (jika ada) ──
   async function onConfirmOrder() {
-    if (!step1Data || !step2Data) return;
+    if (!step2Data) return;
+
+    // Fallback untuk step1Data jika null (saat userAkunError tapi sudah login)
+    const nama = step1Data?.nama || userAkun?.nama || "";
+    const wa = step1Data?.wa || userAkun?.wa || "";
+
+    if (!nama || !wa) {
+      toast({
+        variant: "destructive",
+        title: "Data Diri Tidak Ditemukan",
+        description: "Silakan login ulang atau isi data diri manual.",
+      });
+      setStep(1);
+      return;
+    }
+
     const hargaFinal =
       hitungHarga(step2Data.jenis, step2Data.halaman) +
       biayaTambahan(step2Data.tipe_order);
@@ -394,8 +412,8 @@ export default function OrderPage() {
     try {
       // 1. Buat order dulu
       const payload = {
-        nama: step1Data.nama,
-        wa: step1Data.wa,
+        nama: nama,
+        wa: wa,
         jenis: step2Data.jenis,
         halaman: step2Data.halaman,
         note: step2Data.note || "",
@@ -438,7 +456,7 @@ export default function OrderPage() {
         }
       }
 
-      localStorage.setItem(WA_KEY(step1Data.wa), step1Data.nama);
+      localStorage.setItem(WA_KEY(wa), nama);
       setSuccessOrderId(order_id);
       setStep(4);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -457,6 +475,21 @@ export default function OrderPage() {
   }
 
   function resetAll() {
+    // Jika user sudah login, skip ke step 2 langsung
+    if (loggedUserId && userAkun) {
+      setStep(2);
+      setSuccessOrderId(null);
+      setStep2Data(null);
+      setSelectedTipe("standar");
+      setSelectedJenis("");
+      setSelectedHalaman(10);
+      setFileTugasFile(null);
+      setPakaiPoin(false);
+      setPakaiDiskonReferral(false);
+      form2.reset();
+      return;
+    }
+    // User belum login atau error → reset ke step 1
     setStep(1);
     setSuccessOrderId(null);
     setStep1Data(null);
@@ -468,6 +501,8 @@ export default function OrderPage() {
     setSelectedJenis("");
     setSelectedHalaman(10);
     setFileTugasFile(null);
+    setPakaiPoin(false);
+    setPakaiDiskonReferral(false);
     form1.reset();
     form2.reset();
   }
