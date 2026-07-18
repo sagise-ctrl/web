@@ -137,11 +137,9 @@ export default function RegisterAffiliatePage() {
 
               <div className="bg-slate-50 rounded-lg p-4 space-y-2 text-sm text-slate-600">
                 <p className="font-semibold text-slate-700">Skema Komisi:</p>
-                <p>
-                  • Order ke-1 dari referral Anda: <strong>30%</strong>
-                </p>
-                <p>• Turun 3% setiap order berikutnya</p>
-                <p>• Berlaku sampai order ke-10 per user</p>
+                <p>• Order ke-1: <strong>30%</strong></p>
+                <p>• Order ke-2 s/d ke-10: Turun 3% setiap order</p>
+                <p>• Order ke-11+: <strong>Flat 1%</strong></p>
                 <p>
                   • Minimal pencairan: <strong>Rp 50.000</strong>
                 </p>

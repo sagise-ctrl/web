@@ -336,6 +336,8 @@ function handleCreateOrder(data) {
   }
 
   // Kalkulasi server-side — tidak percaya nilai dari frontend
+  const sheet = getSheet();
+  const order_id = generateOrderId();
   var hargaDasar = hitungHarga(data.jenis, Number(data.halaman));
   var hargaTambahan = biayaTambahan(data.tipe_order || "standar");
   var hTotal = hargaDasar + hargaTambahan;
@@ -1382,10 +1384,17 @@ function handleGetAffiliateAccount(affiliate_id) {
 
 // ─── Hitung Komisi ────────────────────────────────────────────
 function hitungKomisiAffiliate(orderKe) {
-  if (orderKe <= 3) return 0.1;
-  if (orderKe <= 5) return 0.05;
-  if (orderKe <= 10) return 0.03;
-  return 0;
+  if (orderKe === 1) return 0.30;  // 30%
+  if (orderKe === 2) return 0.27;  // 27%
+  if (orderKe === 3) return 0.24;  // 24%
+  if (orderKe === 4) return 0.21;  // 21%
+  if (orderKe === 5) return 0.18;  // 18%
+  if (orderKe === 6) return 0.15;  // 15%
+  if (orderKe === 7) return 0.12;  // 12%
+  if (orderKe === 8) return 0.09;  // 9%
+  if (orderKe === 9) return 0.06;  // 6%
+  if (orderKe === 10) return 0.03; // 3%
+  return 0.01; // Flat 1% untuk order ke-11+
 }
 
 // ─── Handle Order Lunas (komisi affiliate + poin user) ────────
@@ -1452,7 +1461,7 @@ function handleOrderLunas(order_id, user_id, harga_order, poin_dipakai) {
     }
   }
 
-  if (orderKe > 10) return;
+  if (orderKe > 100) return; // Batas wajar, jangan hapus
 
   const persenKomisi = hitungKomisiAffiliate(orderKe);
   const nominalKomisi = Math.floor(harga_order * persenKomisi);
@@ -1891,6 +1900,17 @@ function handleGetUserOrders(user_id) {
   return jsonResponse({ success: true, data: orders });
 }
 
+// ─── Helper: Mask ID ───────────────────────────────────────────
+function maskId(id) {
+  if (!id || id.length < 8) return "***";
+  var parts = id.split("-");
+  if (parts.length >= 3) {
+    // Format: USR-XXXXXX-XXX → USR-***-XXX
+    return parts[0] + "-***-" + parts[parts.length - 1];
+  }
+  return id.substring(0, 4) + "-***";
+}
+
 // ─── Get Affiliate Mutations ──────────────────────────────────
 function handleGetAffiliateMutations(affiliate_id) {
   if (!affiliate_id)
@@ -1911,7 +1931,7 @@ function handleGetAffiliateMutations(affiliate_id) {
           "Order ke-" +
           commRows[i][3] +
           " dari " +
-          commRows[i][1] +
+          maskId(commRows[i][1]) +
           " (" +
           commRows[i][5] +
           "%)",

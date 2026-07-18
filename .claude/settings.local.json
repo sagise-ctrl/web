@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m 'fix: update affiliate commission scheme \\(30%->27%...->3%, flat 1% for order 11+\\) *)"
+    ]
+  }
+}

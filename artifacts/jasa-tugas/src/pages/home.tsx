@@ -362,7 +362,7 @@ export default function Home() {
                 <p className="text-slate-600 text-sm leading-relaxed">
                   Bagikan kode referral kamu ke teman-temanmu. Setiap kali
                   mereka order, kamu dapat komisi hingga <strong>30%</strong>{" "}
-                  dari nilai order, berlaku sampai order ke-10 per user. Semakin
+                  dari nilai order, order ke-11+ tetap dapat <strong>1%</strong>. Semakin
                   banyak teman yang kamu ajak, semakin besar total komisi yang
                   kamu kumpulkan, tidak ada batas jumlah user yang bisa kamu
                   referensikan.
