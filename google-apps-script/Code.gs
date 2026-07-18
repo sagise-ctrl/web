@@ -1401,8 +1401,8 @@ function hitungKomisiAffiliate(orderKe) {
 function handleOrderLunas(order_id, user_id, harga_order, poin_dipakai) {
   // Hitung poin
   var poin_didapat = Math.floor(harga_order / 100) * 5;
-  var diskon_poin = poin_dipakai;
-  var harga_dibayar = harga_order - diskon_poin;
+  var diskon_poin_rupiah = poin_dipakai * 1000;  // konversi poin ke rupiah
+  var harga_dibayar = Math.max(0, harga_order - diskon_poin_rupiah);
 
   const userSheet = getUserSheet();
   const userRows = userSheet.getDataRange().getValues();
@@ -1422,7 +1422,7 @@ function handleOrderLunas(order_id, user_id, harga_order, poin_dipakai) {
     order_id,
     harga_order,
     poin_dipakai,
-    diskon_poin,
+    diskon_poin_rupiah,
     harga_dibayar,
     poin_didapat,
     new Date().toISOString(),

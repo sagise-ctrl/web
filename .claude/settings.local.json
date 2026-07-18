@@ -8,7 +8,8 @@
       "Bash(pnpm install *)",
       "Bash(pnpm run *)",
       "Bash(pnpm --filter '@workspace/jasa-tugas' run build)",
-      "Bash(git commit -m 'chore: clean up unused files and dependencies *)"
+      "Bash(git commit -m 'chore: clean up unused files and dependencies *)",
+      "Bash(git commit -m 'fix\\(Code.gs\\): correct diskon_poin calculation in handleOrderLunas *)"
     ]
   }
 }
