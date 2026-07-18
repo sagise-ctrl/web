@@ -369,7 +369,8 @@ export default function OrderPage() {
 
     // Kalkulasi potongan
     const saldoPoin = userAkun?.saldo_poin ?? 0;
-    const diskonReferral = pakaiDiskonReferral ? 10000 : 0;
+    // Diskon referral otomatis untuk order pertama
+    const diskonReferral = userAkun?.eligible_referral_discount ? 10000 : 0;
     const hSetelahReferral = hargaFinal - diskonReferral;
 
     // Logika pembatasan poin
@@ -423,7 +424,7 @@ export default function OrderPage() {
         sisa_bayar: sisaFinal,
         user_id: loggedUserId || undefined,
         poin_dipakai: poinDipakai,
-        pakai_diskon_referral: pakaiDiskonReferral,
+        pakai_diskon_referral: userAkun?.eligible_referral_discount ? true : false,
         kategori_order: kategoriOrder,
       } as any;
 
@@ -610,7 +611,8 @@ export default function OrderPage() {
 
     // Kalkulasi potongan
     const saldoPoin = userAkun?.saldo_poin ?? 0;
-    const diskonReferral = pakaiDiskonReferral ? 10000 : 0;
+    // Diskon referral otomatis untuk order pertama
+    const diskonReferral = userAkun?.eligible_referral_discount ? 10000 : 0;
     const hSetelahReferral = hTotal - diskonReferral;
 
     // Logika pembatasan poin
@@ -730,17 +732,17 @@ export default function OrderPage() {
                   <span className="text-primary">{formatRupiah(hTotal)}</span>
                 </div>
 
-                {/* Diskon Referral Toggle */}
+                {/* Diskon Referral (Otomatis untuk order pertama) */}
                 {loggedUserId && userAkun?.eligible_referral_discount && (
                   <div
                     className={`flex items-center justify-between pt-2 border-t border-slate-200 ${!referralValid ? "opacity-50" : ""}`}
                   >
                     <div>
                       <p className="text-sm text-green-700 font-medium">
-                        Diskon Referral
+                        🎉 Diskon Referral
                       </p>
                       <p className="text-xs text-slate-400">
-                        -Rp 10.000 (1x untuk order pertama)
+                        -Rp 10.000 (order pertama via referral)
                       </p>
                       {!referralValid && (
                         <p className="text-xs text-red-500">
@@ -749,23 +751,12 @@ export default function OrderPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {pakaiDiskonReferral && (
-                        <span className="text-sm text-green-600 font-medium">
-                          -{formatRupiah(10000)}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        disabled={!referralValid}
-                        onClick={() =>
-                          setPakaiDiskonReferral(!pakaiDiskonReferral)
-                        }
-                        className={`w-11 h-6 rounded-full transition-colors ${pakaiDiskonReferral && referralValid ? "bg-green-500" : "bg-slate-200"}`}
-                      >
-                        <span
-                          className={`block w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${pakaiDiskonReferral && referralValid ? "translate-x-5" : "translate-x-0"}`}
-                        />
-                      </button>
+                      <span className="text-sm text-green-600 font-medium">
+                        -{formatRupiah(10000)}
+                      </span>
+                      <div className="w-11 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                        <span className="block w-5 h-5 bg-white rounded-full shadow translate-x-0.5" />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -841,7 +832,7 @@ export default function OrderPage() {
                 )}
 
                 {/* Harga Final */}
-                {(pakaiPoin || pakaiDiskonReferral) && (
+                {(pakaiPoin || userAkun?.eligible_referral_discount) && (
                   <>
                     <div className="flex justify-between font-bold text-base pt-2 border-t border-slate-200 text-green-700">
                       <span>Total Setelah Diskon</span>

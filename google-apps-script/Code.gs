@@ -1222,6 +1222,15 @@ function handleGetUserAccount(user_id) {
         return jsonResponse({ success: false, message: "Akun belum aktif" });
       }
 
+      // Cek apakah user sudah punya order (untuk eligible diskon referral)
+      var uoSheet = getUserOrdersSheet();
+      var uoRows = uoSheet.getDataRange().getValues();
+      var orderCount = 0;
+      for (var u = 1; u < uoRows.length; u++) {
+        if (uoRows[u][0] === user_id) orderCount++;
+      }
+      var eligible_referral_discount = orderCount === 0;
+
       return jsonResponse({
         success: true,
         data: {
@@ -1231,6 +1240,7 @@ function handleGetUserAccount(user_id) {
           kode_referral: rows[i][3] || "",
           saldo_poin: Number(rows[i][5]) || 0,
           created_at: rows[i][6] || "",
+          eligible_referral_discount: eligible_referral_discount,
         },
       });
     }
