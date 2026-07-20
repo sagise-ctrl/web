@@ -13,14 +13,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { order_id, tipe } = req.body;
 
+    console.log("STEP0: raw body =", JSON.stringify(req.body));
+
     if (!order_id || !tipe)
       return res.status(400).json({ error: "order_id dan tipe wajib diisi" });
 
     // Ambil data order dari GSheet via GAS — tidak percaya nominal dari frontend
+    console.log("STEP1: fetching GAS for order_id =", order_id);
     const gasRes = await fetch(
       `${GAS_URL}?action=getOrder&order_id=${order_id}`,
     );
     const gasData = await gasRes.json();
+    console.log("STEP2: GAS response =", JSON.stringify(gasData));
 
     if (!gasData.success || !gasData.data) {
       return res.status(404).json({ error: "Order tidak ditemukan" });
@@ -41,6 +45,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       amount = Number(order.sisa_bayar);
     }
+    console.log(
+      "STEP3: amount =",
+      amount,
+      "| tipe =",
+      tipe,
+      "| kategori =",
+      order.kategori_order,
+      "| harga =",
+      order.harga,
+      "| dp =",
+      order.dp,
+      "| sisa_bayar =",
+      order.sisa_bayar,
+    );
 
     if (!amount || amount < 2000) {
       return res
@@ -55,15 +73,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const wa = String(order.wa).replace(/^'/, "");
     const email = `${wa.replace(/^0/, "")}@tugasly.my.id`;
     const mobile = wa;
-
     console.log(
-      "PAYMENT_CREATE:",
-      JSON.stringify({
-        order_id,
-        tipe,
-        amount,
-        kategori: order.kategori_order,
-      }),
+      "STEP4: nama =",
+      nama,
+      "| wa =",
+      wa,
+      "| email =",
+      email,
+      "| mobile =",
+      mobile,
     );
 
     const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -77,6 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       description: `Order ${order_id} [${tipe}]`,
       expiredAt,
     };
+    console.log("STEP5: payload to Mayar =", JSON.stringify(payload));
 
     const mayarRes = await fetch("https://api.mayar.id/hl/v1/payment/create", {
       method: "POST",
@@ -88,9 +107,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const mayarData = await mayarRes.json();
+    console.log(
+      "STEP6: Mayar status =",
+      mayarRes.status,
+      "| body =",
+      JSON.stringify(mayarData),
+    );
 
     if (!mayarRes.ok || mayarData.statusCode !== 200) {
-      console.error("MAYAR_ERROR:", mayarData);
+      console.error("MAYAR_ERROR:", JSON.stringify(mayarData));
       return res.status(500).json({
         success: false,
         message:
@@ -107,6 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       transaction_id: mayarData.data.transactionId,
     });
   } catch (err: any) {
+    console.error("PAYMENT_CREATE_CATCH:", err.message, err.stack);
     return res.status(500).json({
       error: "Gagal menghubungi Mayar: " + err.message,
     });
