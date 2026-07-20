@@ -570,6 +570,14 @@ function AdminDashboard() {
           const dpFinal = Math.ceil(hargaFinal * 0.33);
           const sisaFinal = Math.max(0, hargaFinal - dpFinal);
 
+          // Batas minimum harga agar DP tidak < Rp 2.100
+          const MIN_HARGA_A = 6100;
+          const MIN_HARGA_B = 2100;
+          const minHarga =
+            ord.kategori_order === "B" ? MIN_HARGA_B : MIN_HARGA_A;
+          const invalidHarga = hargaFinal > 0 && hargaFinal < minHarga;
+          const maxPenurunan = hargaAsal - minHarga;
+
           return (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
@@ -660,6 +668,15 @@ function AdminDashboard() {
                         <span>Sisa bayar</span>
                         <span>{formatRupiah(sisaFinal)}</span>
                       </div>
+                      {invalidHarga && (
+                        <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5 mt-1">
+                          Harga terlalu kecil. Minimum Rp{" "}
+                          {minHarga.toLocaleString("id-ID")} (kategori{" "}
+                          {ord.kategori_order === "B" ? "B" : "A"}). Maks
+                          penurunan: Rp{" "}
+                          {Math.max(0, maxPenurunan).toLocaleString("id-ID")}.
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-3 pt-2">
@@ -672,6 +689,7 @@ function AdminDashboard() {
                       </Button>
                       <Button
                         className="flex-1"
+                        disabled={invalidHarga}
                         onClick={() =>
                           setVerifikasiDialog((prev) =>
                             prev ? { ...prev, step: 2 } : null,
