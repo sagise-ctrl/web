@@ -370,6 +370,10 @@ function handleCreateOrder(data) {
           poinDipakai = saldoPoinServer;
           diskonPoin = nilaiPoinTotal;
         }
+        // Langsung potong saldo poin agar tidak bisa dipakai ulang di order lain
+        userSheetP
+          .getRange(up + 1, USER_COLUMNS.SALDO_POIN)
+          .setValue(Math.max(0, saldoPoinServer - poinDipakai));
         break;
       }
     }
@@ -386,6 +390,17 @@ function handleCreateOrder(data) {
     }
     if (orderCountV === 0 && hTotal - 10000 >= 0) {
       diskonReferral = 10000;
+      // Langsung catat ke user_orders agar referral tidak bisa dipakai lagi
+      getUserOrdersSheet().appendRow([
+        data.user_id,
+        order_id,
+        hTotal,
+        0,
+        0,
+        hTotal - 10000,
+        0,
+        new Date().toISOString(),
+      ]);
     }
   }
 
@@ -1374,13 +1389,11 @@ function handleGetAffiliateAccount(affiliate_id) {
           total_pencairan: totalPencairan,
           order_count: orderCount,
           created_at: rows[i][6] || "",
-          rekening: {
-            bank: rows[i][9] || "",
-            nomor: rows[i][10] || "",
-            atas_nama: rows[i][11] || "",
-            status: rows[i][12] || "",
-            updated_at: rows[i][13] || "",
-          },
+          rekening_bank: rows[i][9] || "",
+          nomor_rekening: rows[i][10] || "",
+          atas_nama: rows[i][11] || "",
+          rekening_status: rows[i][12] || "",
+          rekening_updated_at: rows[i][13] || "",
         },
       });
     }

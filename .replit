@@ -55,4 +55,3 @@ externalPort = 3000
 [userenv]
 
 [userenv.shared]
-VITE_GAS_URL = "https://script.google.com/macros/s/AKfycbyprhUUKt69ED61W_T0Xoxbwgm-EFTatUHA0xpchNlEx58PxeHhuymppY9olGq0S3jhUw/exec"

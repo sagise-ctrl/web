@@ -5,6 +5,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!GAS_URL)
     return res.status(500).json({ error: "Server tidak terkonfigurasi" });
 
+  // DEBUG: cek URL GAS yang aktif - hapus setelah tahu URL-nya
+  if (req.query?.__debug === "1") {
+    return res.status(200).json({
+      GAS_URL,
+      note: "HAPUS baris debug ini setelah tahu URL-nya!",
+    });
+  }
+
   try {
     const url = new URL(GAS_URL);
 

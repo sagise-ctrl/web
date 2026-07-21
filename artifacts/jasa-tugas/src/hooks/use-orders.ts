@@ -46,11 +46,6 @@ export interface Order {
   kategori_order?: string;
 }
 
-export interface WaCheckResult {
-  exists: boolean;
-  nama_sebelumnya?: string;
-}
-
 const API_URL = "/api/proxy";
 const ADMIN_API_URL = "/api/admin/proxy";
 
@@ -100,19 +95,6 @@ export function useCreateOrder() {
       const json = await res.json();
       if (!json.success) throw new Error(json.message || "Gagal membuat order");
       return json as { success: true; order_id: string };
-    },
-  });
-}
-
-export function useCheckWa() {
-  return useMutation({
-    mutationFn: async (wa: string): Promise<WaCheckResult> => {
-      const res = await fetch(
-        `${API_URL}?action=checkWa&wa=${encodeURIComponent(wa)}`,
-      );
-      const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Gagal cek nomor WA");
-      return json.data as WaCheckResult;
     },
   });
 }

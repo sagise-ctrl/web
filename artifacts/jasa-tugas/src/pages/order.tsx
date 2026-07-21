@@ -26,7 +26,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
   useCreateOrder,
-  useCheckWa,
   useUploadBukti,
   useGetUserAccount,
   hitungHarga,
@@ -175,7 +174,6 @@ function StepIndicator({ current }: { current: number }) {
 export default function OrderPage() {
   const { toast } = useToast();
   const createOrder = useCreateOrder();
-  const checkWa = useCheckWa();
   const uploadBukti = useUploadBukti();
 
   const [step, setStep] = useState(1);
@@ -276,29 +274,9 @@ export default function OrderPage() {
     setWaLama(null);
 
     const waNormal = normalizeWa(data.wa);
-    let foundNamaLama: string | null = localStorage.getItem(WA_KEY(waNormal));
+    const foundNamaLama: string | null = localStorage.getItem(WA_KEY(waNormal));
 
-    if (!foundNamaLama && import.meta.env.VITE_GAS_URL) {
-      console.log("Memanggil GAS...");
-      try {
-        const result = await checkWa.mutateAsync(waNormal);
-        console.log("GAS exists:", result.exists);
-        console.log("GAS ada nama_sebelumnya:", !!result.nama_sebelumnya);
-        if (result.exists && result.nama_sebelumnya) {
-          foundNamaLama = result.nama_sebelumnya;
-          localStorage.setItem(WA_KEY(waNormal), foundNamaLama);
-          console.log("Nama lama ditemukan di GAS");
-        } else {
-          console.log("WA tidak ditemukan di GAS");
-        }
-      } catch (err) {
-        console.error("GAS error:", err);
-      }
-    } else if (!import.meta.env.VITE_GAS_URL) {
-      console.warn("VITE_GAS_URL tidak di-set, skip GAS");
-    }
-
-    console.log("foundNamaLama final:", foundNamaLama);
+    console.log("foundNamaLama:", foundNamaLama);
     console.log(
       "Nama cocok?",
       foundNamaLama?.toLowerCase() === data.nama.toLowerCase(),
@@ -1272,12 +1250,12 @@ export default function OrderPage() {
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={checkWa.isPending}
+                    disabled={createOrder.isPending}
                   >
-                    {checkWa.isPending ? (
+                    {createOrder.isPending ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Memeriksa...
+                        Memproses...
                       </>
                     ) : (
                       <>
